@@ -1,8 +1,130 @@
 import { PrismaClient } from '@prisma/client';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const prisma = new PrismaClient();
 
 const isDryRun = process.argv.includes('--dry-run') || !process.env.DATABASE_URL;
+
+type TestSeedTuple = readonly [string, string, string, string, string, string];
+
+type ParsedMarkdownSection = {
+  blockKey: string;
+  title: string;
+  content: string;
+  sourceSectionPath: string;
+};
+
+const markdownFileByTestId: Record<string, string> = {
+  'test-abitur-de': 'abitur-markdown-content.ts',
+  'test-act-us': 'act-markdown-content.ts',
+  'test-alevel-uk': 'alevel-markdown-content.ts',
+  'test-ap-us': 'ap-markdown-content.ts',
+  'test-bmat': 'bmat-markdown-content.ts',
+  'test-cambridge-uk': 'cambridge-markdown-content.ts',
+  'test-celpebras-br': 'celpebras-markdown-content.ts',
+  'test-cils-it': 'cils-markdown-content.ts',
+  'test-clt-us': 'clt-markdown-content.ts',
+  'test-cpa-us': 'cpa-markdown-content.ts',
+  'test-csat-kr': 'csat-markdown-content.ts',
+  'test-csca-cn': 'csca-markdown-content.ts',
+  'test-cuet-in': 'cuet-markdown-content.ts',
+  'test-dat-us': 'dat-markdown-content.ts',
+  'test-dele-es': 'dele-markdown-content.ts',
+  'test-delf-dalf-fr': 'delf-markdown-content.ts',
+  'test-duolingo-det': 'duolingo-markdown-content.ts',
+  'test-eju-japanese': 'eju-markdown-content.ts',
+  'test-gamsat-uk-au': 'gamsat-markdown-content.ts',
+  'test-gmat-focus': 'gmat-markdown-content.ts',
+  'test-gre-shorter': 'gre-markdown-content.ts',
+  'test-hsk-chinese': 'hsk-markdown-content.ts',
+  'test-ielts-academic': 'ielts-markdown-content.ts',
+  'test-imat-italy': 'imat-markdown-content.ts',
+  'test-itep-academic': 'itep-markdown-content.ts',
+  'test-jlpt-exam': 'jlpt-markdown-content.ts',
+  'test-languagecert-academic': 'languagecert-markdown-content.ts',
+  'test-linguaskill-cambridge': 'linguaskill-markdown-content.ts',
+  'test-matura-europe': 'matura-markdown-content.ts',
+  'test-mcat-aamc': 'mcat-markdown-content.ts',
+  'test-met-michigan': 'met-markdown-content.ts',
+  'test-staatsexamen-nt2': 'nt2-markdown-content.ts',
+  'test-oxford-ote': 'ote-markdown-content.ts',
+  'test-plab': 'plab-markdown-content.ts',
+  'test-pmp': 'pmp-markdown-content.ts',
+  'test-polish-state': 'polish_state_certificate-markdown-content.ts',
+  'test-pte': 'pte-markdown-content.ts',
+  'test-sat': 'sat-markdown-content.ts',
+  'test-testdaf': 'testdaf-markdown-content.ts',
+  'test-toefl-ibt': 'toefl-markdown-content.ts',
+  'test-toeic': 'toeic-markdown-content.ts',
+  'test-tomer': 'tomer-markdown-content.ts',
+  'test-topik': 'topik-markdown-content.ts',
+  'test-torfl': 'torfl-markdown-content.ts',
+  'test-ucat': 'ucat-markdown-content.ts',
+  'test-ukbi': 'ukbi-markdown-content.ts',
+  'test-usmle': 'usmle-markdown-content.ts',
+  'test-yks': 'yks-markdown-content.ts',
+  'test-yos': 'yos-markdown-content.ts'
+};
+
+function extractMarkdownContent(sourceText: string): string {
+  const start = sourceText.indexOf('`');
+  const end = sourceText.lastIndexOf('`;');
+  if (start === -1 || end <= start) return sourceText;
+  return sourceText
+    .slice(start + 1, end)
+    .replace(/\\`/g, '`')
+    .replace(/\\\${/g, '${');
+}
+
+function readMarkdownContent(fileName: string): string {
+  const filePath = join(process.cwd(), 'apps', 'web', 'src', 'features', 'admin-preview', fileName);
+  return extractMarkdownContent(readFileSync(filePath, 'utf8'));
+}
+
+function contentHash(content: string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function blockKey(value: string, index: number): string {
+  const normalized = value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 70);
+  return `${index + 1}-${normalized || 'section'}`;
+}
+
+function parseMarkdownContentBlocks(markdown: string): ParsedMarkdownSection[] {
+  const lines = markdown.split(/\r?\n/);
+  const headings = lines
+    .map((line, index) => {
+      const match = /^(#{1,3})\s+(.+)$/.exec(line.trim());
+      return match ? { index, title: match[2].replace(/[*_`]/g, '').trim() } : null;
+    })
+    .filter((item): item is { index: number; title: string } => !!item);
+
+  if (headings.length === 0) {
+    return [{
+      blockKey: '1-full-source',
+      title: 'Full source content',
+      content: markdown,
+      sourceSectionPath: '/'
+    }];
+  }
+
+  return headings.map((heading, index) => {
+    const next = headings[index + 1];
+    return {
+      blockKey: blockKey(heading.title, index),
+      title: heading.title,
+      content: lines.slice(heading.index, next ? next.index : lines.length).join('\n').trim(),
+      sourceSectionPath: `/${heading.title}`
+    };
+  });
+}
 
 async function main() {
   const summary = {
@@ -566,7 +688,7 @@ async function seedInternationalTests() {
     ['test-ucat', 'UCAT (University Clinical Aptitude Test)', 'اختبار الكفاءة السريرية الجامعية (UCAT)', 'University Clinical Aptitude Test', 'UCAT Consortium', 'UNDERGRAD_ADMISSION'],
     ['test-yos', 'YOS / TR-YOS (Turkish Universities Student Admission)', 'اختبار الطلاب الأجانب في تركيا (YOS)', 'Turkish Universities Student Admission Exam (TR-YOS)', 'OSYM', 'UNDERGRAD_ADMISSION'],
     ['test-bmat', 'BMAT (BioMedical Admissions Test)', 'اختبار القبول في الطب الحيوي (BMAT)', 'BioMedical Admissions Test (BMAT)', 'CAAT', 'UNDERGRAD_ADMISSION']
-  ] as const;
+  ] as readonly TestSeedTuple[];
 
   const keyify = (value: string) => value
     .toLowerCase()
@@ -649,6 +771,97 @@ async function seedInternationalTests() {
       };
     })
   });
+
+  const createdTests = await prisma.internationalTest.findMany({
+    where: { publicId: { in: tests.map(([publicId]) => publicId) } },
+    select: { id: true, publicId: true }
+  });
+  const testIdByPublicId = new Map(createdTests.map((test) => [test.publicId, test.id]));
+
+  for (const [publicId, displayName, localizedNameAr, localizedNameEn, _providerName, testCategory] of tests) {
+    const testId = testIdByPublicId.get(publicId);
+    const fileName = markdownFileByTestId[publicId];
+    if (!testId || !fileName) continue;
+
+    const markdownContent = readMarkdownContent(fileName);
+    const hash = contentHash(markdownContent);
+    const contentBlocks = parseMarkdownContentBlocks(markdownContent);
+    const version = await prisma.internationalTestVersion.create({
+      data: {
+        testId,
+        versionNumber: 1,
+        status: 'PUBLISHED',
+        sourceFileName: fileName,
+        sourceUri: `apps/web/src/features/admin-preview/${fileName}`,
+        sourceHash: hash,
+        importedAt: new Date(),
+        publishedAt: new Date(),
+        changeSummary: {
+          comparisonStatus: 'BASELINE_VERSION',
+          migratedFromExistingPreviewFiles: true,
+          addedFields: [],
+          removedFields: [],
+          changedFields: []
+        },
+        rawContentBlocks: [{
+          blockKey: 'source.raw',
+          blockType: 'RAW_SOURCE',
+          title: fileName,
+          contentLength: markdownContent.length,
+          reviewStatus: 'APPROVED'
+        }],
+        metadata: {
+          phase09Migration: 'baseline-version-from-existing-markdown',
+          displayName,
+          localizedNameAr,
+          localizedNameEn,
+          extractedSectionCount: contentBlocks.length
+        },
+        contentBlocks: {
+          create: [
+            {
+              blockKey: 'source.raw',
+              blockType: 'RAW_SOURCE',
+              title: fileName,
+              content: markdownContent,
+              sourceSectionPath: '/',
+              reviewStatus: 'APPROVED',
+              metadata: {
+                preservedOriginalSource: true,
+                sourceHash: hash
+              }
+            },
+            ...contentBlocks.map((section) => ({
+              blockKey: `section.${section.blockKey}`,
+              blockType: 'SOURCE_SECTION',
+              title: section.title,
+              content: section.content,
+              sourceSectionPath: section.sourceSectionPath,
+              reviewStatus: 'NEEDS_REVIEW',
+              metadata: {
+                extractedFromMarkdownHeading: true
+              }
+            }))
+          ]
+        }
+      }
+    });
+
+    await prisma.internationalTest.update({
+      where: { id: testId },
+      data: {
+        currentPublishedVersionId: version.id,
+        optionalFields: {
+          phase09SeedSource: 'frontend-preview-baseline',
+          sourceOfTruthStatus: 'database-version-baseline',
+          familyProfileKey: familyKeyFor(publicId, testCategory),
+          sourceMarkdownFile: fileName,
+          sourceMarkdownHash: hash,
+          extractedSectionCount: contentBlocks.length
+        }
+      }
+    });
+  }
   return;
 
   // Clear any existing to ensure clean slate for unique/relation constraints
