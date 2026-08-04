@@ -18,6 +18,18 @@ export class InternationalTestAdminRouter {
       pageSize: z.string().optional().transform((value) => value ? Math.min(parseInt(value, 10), 50) : 20)
     });
 
+    const importDraftSchema = z.object({
+      sourceImportRecordId: z.string().optional(),
+      sourceFileName: z.string().min(1),
+      sourceUri: z.string().optional(),
+      sourceHash: z.string().optional(),
+      rawContent: z.string().optional(),
+      importedBy: z.string().optional(),
+      detectedFields: z.record(z.string(), z.unknown()).optional(),
+      detectedSections: z.array(z.string()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional()
+    });
+
     router.get('/', asyncHandler(async (req: Request, res: Response) => {
       const parsed = querySchema.parse(req.query);
       res.json(await internationalTestAdminUseCases.list({
@@ -34,6 +46,11 @@ export class InternationalTestAdminRouter {
 
     router.post('/upsert', asyncHandler(async (req: Request, res: Response) => {
       res.json(await internationalTestAdminUseCases.upsertTest(req.body));
+    }));
+
+    router.post('/:id/import-draft', asyncHandler(async (req: Request, res: Response) => {
+      const parsed = importDraftSchema.parse(req.body);
+      res.status(201).json(await internationalTestAdminUseCases.createImportDraftVersion(req.params.id, parsed));
     }));
 
     router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -154,4 +171,3 @@ export class InternationalTestAdminRouter {
     return router;
   }
 }
-

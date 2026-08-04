@@ -190,6 +190,30 @@ export interface UpsertInternationalTestVersionDto {
   metadata?: Record<string, unknown>;
 }
 
+export interface InternationalTestImportDraftRequestDto {
+  sourceImportRecordId?: string;
+  sourceFileName: string;
+  sourceUri?: string;
+  sourceHash?: string;
+  rawContent?: string;
+  importedBy?: string;
+  detectedFields?: Record<string, unknown>;
+  detectedSections?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestImportDraftResultDto {
+  testId: string;
+  versionId: string;
+  versionNumber: number;
+  status: InternationalTestVersionDto['status'];
+  sourceFileName: string;
+  sourceHash?: string;
+  preservedRawContent: boolean;
+  reviewStatus: 'NEEDS_REVIEW';
+  createdContentBlockCount: number;
+}
+
 export interface InternationalTestDeliveryModeProfileDto {
   id: string;
   versionId: string;

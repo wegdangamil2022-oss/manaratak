@@ -20,6 +20,8 @@ import {
   InternationalTestPreparationMaterialDto,
   UpsertInternationalTestPreparationMaterialDto,
   InternationalTestEvidenceDto,
+  InternationalTestImportDraftRequestDto,
+  InternationalTestImportDraftResultDto,
   InternationalTestStatus,
   InternationalTestDeliveryMode
 } from '@manaratak/domain';
@@ -33,6 +35,24 @@ const defaultInclude = {
   availability: true,
   preparationMaterials: true,
   evidence: true
+};
+
+type InternationalTestVersionRecord = {
+  id: string;
+  versionNumber: number;
+  status: string;
+  sourceFileName?: string | null;
+  sourceHash?: string | null;
+  contentBlocks?: unknown[];
+};
+
+type InternationalTestVersionDelegate = {
+  findFirst(args: Record<string, unknown>): Promise<{ versionNumber: number } | null>;
+  create(args: Record<string, unknown>): Promise<InternationalTestVersionRecord>;
+};
+
+type PrismaClientWithInternationalTestVersions = PrismaClient & {
+  internationalTestVersion: InternationalTestVersionDelegate;
 };
 
 export class PrismaInternationalTestRepository implements IInternationalTestRepository {
@@ -535,6 +555,93 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
       update: payload
     });
     return this.mapEvidenceToDto(record);
+  }
+
+  async createImportDraftVersion(
+    testId: string,
+    data: InternationalTestImportDraftRequestDto
+  ): Promise<InternationalTestImportDraftResultDto> {
+    const existingTest = await this.prisma.internationalTest.findUnique({ where: { id: testId } });
+    if (!existingTest) {
+      throw new Error(`International test with id ${testId} not found`);
+    }
+
+    const prismaWithVersions = this.prisma as PrismaClientWithInternationalTestVersions;
+    const latestVersion = await prismaWithVersions.internationalTestVersion.findFirst({
+      where: { testId },
+      orderBy: { versionNumber: 'desc' },
+      select: { versionNumber: true }
+    });
+    const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
+    const hasRawContent = typeof data.rawContent === 'string' && data.rawContent.trim().length > 0;
+    const rawContentBlocks = hasRawContent
+      ? [
+          {
+            blockKey: 'source.raw',
+            blockType: 'RAW_SOURCE',
+            title: data.sourceFileName,
+            contentLength: data.rawContent?.length ?? 0,
+            reviewStatus: 'NEEDS_REVIEW'
+          }
+        ]
+      : [];
+
+    const version = await prismaWithVersions.internationalTestVersion.create({
+      data: {
+        testId,
+        versionNumber,
+        status: 'DRAFT',
+        sourceImportRecordId: data.sourceImportRecordId,
+        sourceFileName: data.sourceFileName,
+        sourceUri: data.sourceUri,
+        sourceHash: data.sourceHash,
+        importedAt: new Date(),
+        changeSummary: {
+          comparisonStatus: 'PENDING_COMPARISON',
+          createdFromExistingTest: true,
+          deletedSourceFieldsRequireReview: true
+        },
+        rawContentBlocks,
+        metadata: {
+          ...(data.importedBy ? { importedBy: data.importedBy } : {}),
+          detectedFields: data.detectedFields ?? {},
+          detectedSections: data.detectedSections ?? [],
+          ...(data.metadata ?? {})
+        },
+        contentBlocks: hasRawContent
+          ? {
+              create: [
+                {
+                  blockKey: 'source.raw',
+                  blockType: 'RAW_SOURCE',
+                  title: data.sourceFileName,
+                  content: data.rawContent,
+                  sourceSectionPath: '/',
+                  reviewStatus: 'NEEDS_REVIEW',
+                  metadata: {
+                    preservedOriginalSource: true,
+                    ...(data.sourceHash ? { sourceHash: data.sourceHash } : {}),
+                    ...(data.sourceUri ? { sourceUri: data.sourceUri } : {})
+                  }
+                }
+              ]
+            }
+          : undefined
+      },
+      include: { contentBlocks: true }
+    });
+
+    return {
+      testId,
+      versionId: version.id,
+      versionNumber: version.versionNumber,
+      status: version.status as InternationalTestImportDraftResultDto['status'],
+      sourceFileName: version.sourceFileName ?? data.sourceFileName,
+      sourceHash: version.sourceHash ?? undefined,
+      preservedRawContent: hasRawContent,
+      reviewStatus: 'NEEDS_REVIEW',
+      createdContentBlockCount: Array.isArray(version.contentBlocks) ? version.contentBlocks.length : 0
+    };
   }
 
   // --- Private Mapping Helpers ---

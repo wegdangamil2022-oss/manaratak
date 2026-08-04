@@ -22,7 +22,9 @@ import {
   UpsertInternationalTestAvailabilityDto,
   InternationalTestPreparationMaterialDto,
   UpsertInternationalTestPreparationMaterialDto,
-  InternationalTestEvidenceDto
+  InternationalTestEvidenceDto,
+  InternationalTestImportDraftRequestDto,
+  InternationalTestImportDraftResultDto
 } from '@manaratak/domain';
 
 export class InternationalTestAdminUseCases {
@@ -212,6 +214,23 @@ export class InternationalTestAdminUseCases {
     if (!this.repository.addEvidence) throw new Error('Repository method addEvidence not implemented');
     return this.repository.addEvidence(testId, data);
   }
+
+  public async createImportDraftVersion(
+    testId: string,
+    data: InternationalTestImportDraftRequestDto
+  ): Promise<InternationalTestImportDraftResultDto> {
+    await this.get(testId);
+    if (!data.sourceFileName || data.sourceFileName.trim() === '') {
+      throw new Error('Source file name is required to create an import draft version');
+    }
+    if (!this.repository.createImportDraftVersion) {
+      throw new Error('Repository method createImportDraftVersion not implemented');
+    }
+    return this.repository.createImportDraftVersion(testId, {
+      ...data,
+      sourceFileName: data.sourceFileName.trim()
+    });
+  }
 }
 
 export class InternationalTestPublicUseCases {
@@ -234,4 +253,3 @@ export class InternationalTestPublicUseCases {
     return test;
   }
 }
-
