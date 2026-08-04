@@ -8,7 +8,7 @@ import { useTranslation } from "../../i18n/I18nProvider";
 const testCategories = ['LANGUAGE_PROFICIENCY', 'UNDERGRAD_ADMISSION', 'GRAD_ADMISSION', 'PROFESSIONAL_LICENSING', 'ACADEMIC_PLACEMENT', 'OTHER'];
 
 export function InternationalTestList() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<PaginatedResult<PublicInternationalTestDto> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ export function InternationalTestList() {
 
             <div>
               <label className="block text-sm font-medium mb-1">{t('provider')}</label>
-              <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('ielts_ets_college_board')} className="w-full rounded-xl border px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('provider_examples') || 'ETS, College Board, Cambridge...'} className="w-full rounded-xl border px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <Button onClick={applyFilters} className="w-full">{t('apply_filters')}</Button>
@@ -101,71 +101,6 @@ export function InternationalTestList() {
         ) : (
           <div className="space-y-4">
             {processedTests.map((test) => {
-              const isIelts = test.slug === 'ielts';
-              if (isIelts) {
-                return (
-                  <article key={test.id || test.slug} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50/10 via-white to-white p-5 shadow-xs transition-all hover:shadow-md sm:p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 rtl:left-0 rtl:right-auto bg-[#0F4B3A] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl rtl:rounded-bl-none rtl:rounded-br-xl">
-                      {language === 'ar' ? 'موصى به' : 'RECOMMENDED'}
-                    </div>
-                    <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                        <div className="flex flex-col items-center justify-center border border-slate-200/80 bg-white rounded-2xl p-4 w-32 h-24 flex-shrink-0 shadow-xs self-start sm:self-auto">
-                          <span className="text-[#D32F2F] font-black text-3xl tracking-tighter leading-none">IELTS<span className="text-xs font-normal align-super">®</span></span>
-                          <span className="text-[7px] text-slate-400 text-center leading-tight mt-1.5 font-bold uppercase tracking-wider">English for International Opportunity</span>
-                        </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <h3 className="text-xl font-black leading-snug sm:text-2xl text-slate-900">
-                              <Link to={`/international-tests/${test.slug}`} className="hover:text-[#0F4B3A] transition-colors">
-                                {test.displayName}
-                              </Link>
-                            </h3>
-                            <span className="bg-emerald-100/60 text-[#0F4B3A] text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              {language === 'ar' ? 'متاح' : 'Available'}
-                            </span>
-                          </div>
-                          
-                          <p className="text-sm font-semibold text-slate-500 mb-3">{test.providerName}</p>
-                          <p className="text-xs sm:text-sm text-slate-600 mb-4 leading-relaxed max-w-2xl">
-                            {language === 'ar' 
-                              ? 'اختبار دولي معتمد لقياس مهارات اللغة الإنجليزية للأشخاص الذين يرغبون في الدراسة أو العمل أو الهجرة في بيئة تتحدث الإنجليزية.' 
-                              : 'A certified international test to measure English language proficiency for study, work, or migration in an English-speaking environment.'}
-                          </p>
-                          
-                          <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
-                            <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-slate-700">{language === 'ar' ? 'اختبار لغة إنجليزية' : 'English Language Test'}</span>
-                            <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[#0F4B3A] border border-emerald-500/10">IELTS</span>
-                            <span className="rounded-lg bg-slate-100 px-2.5 py-1.5">
-                              {language === 'ar' ? 'نطاق الدرجة' : 'Score Range'}: 0 - 9 Bands
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto mt-2 md:mt-0 flex-shrink-0 self-stretch md:self-start justify-end md:justify-start">
-                        <Link 
-                          to={`/international-tests/${test.slug}`} 
-                          className="flex-1 md:flex-initial inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#0F4B3A] px-5 py-2.5 text-xs font-black text-white hover:bg-[#0c3e30] transition-colors shadow-sm text-center"
-                        >
-                          {language === 'ar' ? 'التفاصيل' : 'Details'}
-                        </Link>
-                        <a 
-                          href="https://www.ielts.org" 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="flex-1 md:flex-initial inline-flex min-h-[44px] items-center justify-center rounded-xl bg-slate-100 border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-800 hover:bg-slate-200 transition-all text-center"
-                        >
-                          {language === 'ar' ? 'الموقع الرسمي' : 'Official Site'}
-                        </a>
-                      </div>
-                    </div>
-                  </article>
-                );
-              }
-
               return (
                 <article key={test.id || test.slug} className="rounded-2xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
