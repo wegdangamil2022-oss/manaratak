@@ -1,18 +1,45 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { readFile } from 'fs/promises';
+import * as path from 'path';
 import { z } from 'zod';
 import { ImportAdminUseCases } from '@manaratak/application';
-import { ImportTargetDomain } from '@manaratak/domain';
+import { ImportRecordDto, ImportRecordStatus, ImportTargetDomain } from '@manaratak/domain';
+
+type ImportBatchLike = {
+  id?: string;
+  dataType?: string;
+};
+
+type ImportRecordWithBatch = ImportRecordDto & {
+  batchId?: string;
+  targetDomain?: string;
+  batch?: ImportBatchLike;
+};
 
 export class ImportAdminRouter {
   public static create(cradle: { 
     importAdminUseCases: ImportAdminUseCases;
-    importRepository?: any;
-    internationalTestImportPromotionUseCase?: any;
+    importRepository?: {
+      getRecordById(id: string): Promise<ImportRecordWithBatch | null>;
+      getBatchById?(id: string): Promise<ImportBatchLike | null>;
+      listRecords?(filters?: { batchId?: string; page?: number; pageSize?: number }): Promise<{ data: ImportRecordWithBatch[]; total: number; page: number; pageSize: number }>;
+      updateRecord?(id: string, updates: { status?: string; validationErrors?: unknown; promotedEntityId?: string; processingNotes?: string }): Promise<ImportRecordWithBatch | null>;
+    };
+    internationalTestImportPromotionUseCase?: { promote(record: ImportRecordWithBatch): Promise<{ type: string }> };
+    majorImportPromotionUseCase?: { promote(record: ImportRecordWithBatch): Promise<{ type: string; majorId?: string; existingId?: string; versionNumber?: number; reason?: string; error?: string }> };
+    fellowshipImportPromotionUseCase?: { promote(record: ImportRecordWithBatch): Promise<{ type: string; fellowshipId?: string; existingId?: string; reason?: string; error?: string }> };
   }): Router {
     const router = Router();
-    const { importAdminUseCases, importRepository, internationalTestImportPromotionUseCase } = cradle;
+    const {
+      importAdminUseCases,
+      importRepository,
+      internationalTestImportPromotionUseCase,
+      majorImportPromotionUseCase,
+      fellowshipImportPromotionUseCase,
+    } = cradle;
 
-    const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
+    type RouteHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
+    const asyncHandler = (fn: RouteHandler) => (req: Request, res: Response, next: NextFunction) => {
       Promise.resolve(fn(req, res, next)).catch(next);
     };
 
@@ -20,6 +47,20 @@ export class ImportAdminRouter {
     const DEFAULT_PAGE = 1;
     const DEFAULT_PAGE_SIZE = 50;
     const MAX_PAGE_SIZE = 100;
+    const MAJOR_CATALOG_FILES = {
+      BACHELOR: 'MANARATAK_Bachelor_Majors_By_Colleges_v1.0.md',
+      MASTER: 'MANARATAK_Master_Specializations_By_Academic_Fields_v1.0.md',
+      DOCTORATE: 'MANARATAK_Doctoral_Specializations_By_Academic_Fields_v1.0.md',
+      FELLOWSHIP: 'MANARATAK_Fellowships_By_Professional_Domains_v1.0.md',
+    } as const;
+    const MAJOR_DETAIL_DOSSIER_FILES = {
+      BACHELOR: 'MANARATAK_Bachelor_Majors_Medicine_01_First_10.md',
+      MASTER: 'masters_MAS-0001_to_MAS-0010.md',
+      DOCTORATE: 'doctorates_DOC-0001_to_DOC-0010.md',
+      FELLOWSHIP: 'fellowships_FEL-0001_to_FEL-0010.md',
+    } as const;
+
+    const majorCatalogKindSchema = z.enum(['BACHELOR', 'MASTER', 'DOCTORATE', 'FELLOWSHIP']);
     
     const importBodySchema = z.object({
       dataText: z.string()
@@ -32,12 +73,84 @@ export class ImportAdminRouter {
         .transform(val => val === 'INTERNATIONAL_TESTS' ? ImportTargetDomain.Tests : val),
     });
 
+    const majorCatalogBodySchema = z.object({
+      dataText: z.string().min(1).optional(),
+      catalogKind: majorCatalogKindSchema,
+      sourceSystem: z.string().optional(),
+      sourceFileName: z.string().optional(),
+    }).refine((value) => Boolean(value.dataText), {
+      message: 'dataText is required for direct catalog import.',
+      path: ['dataText'],
+    });
+
+    const majorDetailDossierBodySchema = z.object({
+      dataText: z.string().min(1).optional(),
+      catalogKind: majorCatalogKindSchema,
+      sourceSystem: z.string().optional(),
+      sourceFileName: z.string().optional(),
+    }).refine((value) => Boolean(value.dataText), {
+      message: 'dataText is required for direct detail dossier import.',
+      path: ['dataText'],
+    });
+
     // POST /admin/imports
     router.post('/', asyncHandler(async (req: Request, res: Response) => {
        const payload = importBodySchema.parse(req.body);
        const result = await importAdminUseCases.importData(payload);
        res.status(201).json(result);
      }));
+
+    router.post('/major-catalogs', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorCatalogBodySchema.parse(req.body);
+      const result = await importAdminUseCases.importMajorCatalogText({
+        dataText: payload.dataText ?? '',
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        sourceFileName: payload.sourceFileName,
+      });
+      res.status(201).json(result);
+    }));
+
+    router.post('/major-catalogs/workspace/:catalogKind', asyncHandler(async (req: Request, res: Response) => {
+      const catalogKind = majorCatalogKindSchema.parse(req.params.catalogKind);
+      const sourceFileName = MAJOR_CATALOG_FILES[catalogKind];
+      const catalogPath = path.resolve(process.cwd(), 'workspace', 'phase-10-major-catalogs', sourceFileName);
+      const dataText = await readFile(catalogPath, 'utf8');
+
+      const result = await importAdminUseCases.importMajorCatalogText({
+        dataText,
+        catalogKind,
+        sourceSystem: `PHASE_10_${catalogKind}_CATALOG`,
+        sourceFileName,
+      });
+      res.status(201).json(result);
+    }));
+
+    router.post('/major-detail-dossiers', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorDetailDossierBodySchema.parse(req.body);
+      const result = await importAdminUseCases.importMajorDetailDossierText({
+        dataText: payload.dataText ?? '',
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        sourceFileName: payload.sourceFileName,
+      });
+      res.status(201).json(result);
+    }));
+
+    router.post('/major-detail-dossiers/workspace/:catalogKind', asyncHandler(async (req: Request, res: Response) => {
+      const catalogKind = majorCatalogKindSchema.parse(req.params.catalogKind);
+      const sourceFileName = MAJOR_DETAIL_DOSSIER_FILES[catalogKind];
+      const dossierPath = path.resolve(process.cwd(), 'workspace', 'phase-10-major-detail-dossiers', sourceFileName);
+      const dataText = await readFile(dossierPath, 'utf8');
+
+      const result = await importAdminUseCases.importMajorDetailDossierText({
+        dataText,
+        catalogKind,
+        sourceSystem: `PHASE_10_${catalogKind}_DETAIL_DOSSIER`,
+        sourceFileName,
+      });
+      res.status(201).json(result);
+    }));
 
     // GET /admin/imports/queue/jobs/:batchId
     router.get('/queue/jobs/:batchId', asyncHandler(async (req: Request, res: Response) => {
@@ -143,6 +256,73 @@ export class ImportAdminRouter {
       res.json(records);
     }));
 
+    const promoteRecord = async (record: ImportRecordWithBatch) => {
+      const batch = record.batch || (record.batchId ? await importRepository?.getBatchById?.(record.batchId) : undefined);
+      const targetDomain = record.targetDomain || batch?.dataType;
+
+      if (targetDomain === ImportTargetDomain.Tests || targetDomain === 'INTERNATIONAL_TESTS' || targetDomain === 'TESTS') {
+        if (!internationalTestImportPromotionUseCase) {
+           return { statusCode: 500, body: { error: 'International Test promotion use case not available' } };
+        }
+
+        const result = await internationalTestImportPromotionUseCase.promote(record);
+        return { statusCode: result.type === 'REJECTED' || result.type === 'FAILED' ? 422 : 200, body: result };
+      }
+
+      if (targetDomain === ImportTargetDomain.Majors || targetDomain === 'MAJORS') {
+        if (!majorImportPromotionUseCase) {
+          return { statusCode: 500, body: { error: 'Major promotion use case not available' } };
+        }
+
+        const result = await majorImportPromotionUseCase.promote(record);
+        if (importRepository?.updateRecord) {
+          if (result.type === 'CREATED' || result.type === 'VERSION_CREATED' || result.type === 'DUPLICATE') {
+            await importRepository.updateRecord(record.id as string, {
+              status: ImportRecordStatus.PROMOTED,
+              promotedEntityId: result.majorId || result.existingId,
+              processingNotes: result.type === 'VERSION_CREATED'
+                ? `Promoted into existing major as version ${result.versionNumber}.`
+                : `Promoted to majors workspace with result ${result.type}.`,
+            });
+          } else {
+            await importRepository.updateRecord(record.id as string, {
+              status: ImportRecordStatus.FAILED,
+              validationErrors: result.type === 'REJECTED' ? [result.reason] : [result.error],
+              processingNotes: 'Major promotion failed; record remains reviewable from import logs.',
+            });
+          }
+        }
+        return { statusCode: result.type === 'REJECTED' || result.type === 'FAILED' ? 422 : 200, body: result };
+      }
+
+      if (targetDomain === ImportTargetDomain.Fellowships || targetDomain === 'FELLOWSHIPS') {
+        if (!fellowshipImportPromotionUseCase) {
+          return { statusCode: 500, body: { error: 'Fellowship promotion use case not available' } };
+        }
+
+        const result = await fellowshipImportPromotionUseCase.promote(record);
+        if (importRepository?.updateRecord) {
+          if (result.type === 'CREATED' || result.type === 'UPDATED') {
+            await importRepository.updateRecord(record.id as string, {
+              status: ImportRecordStatus.PROMOTED,
+              promotedEntityId: result.fellowshipId || result.existingId,
+              processingNotes: `Promoted to fellowship definitions workspace with result ${result.type}.`,
+            });
+          } else {
+            await importRepository.updateRecord(record.id as string, {
+              status: ImportRecordStatus.FAILED,
+              validationErrors: result.type === 'REJECTED' ? [result.reason] : [result.error],
+              processingNotes: 'Fellowship promotion failed; record remains reviewable from import logs.',
+            });
+          }
+        }
+
+        return { statusCode: result.type === 'REJECTED' || result.type === 'FAILED' ? 422 : 200, body: result };
+      }
+
+      return { statusCode: 422, body: { error: 'Domain promotion is disabled in Phase 06 and must be implemented by the owning domain phase.' } };
+    };
+
     // POST /admin/imports/records/:id/promote
     router.post('/records/:id/promote', asyncHandler(async (req: Request, res: Response) => {
       const recordId = req.params.id;
@@ -154,22 +334,56 @@ export class ImportAdminRouter {
         return res.status(404).json({ error: 'Record not found' });
       }
 
-      const batch = record.batch || await importRepository.getBatchById?.(record.batchId);
-      const targetDomain = record.targetDomain || batch?.dataType;
+      const result = await promoteRecord(record);
+      res.status(result.statusCode).json(result.body);
+    }));
 
-      if (targetDomain === ImportTargetDomain.Tests || targetDomain === 'INTERNATIONAL_TESTS' || targetDomain === 'TESTS') {
-        if (!internationalTestImportPromotionUseCase) {
-           return res.status(500).json({ error: 'International Test promotion use case not available' });
-        }
-        
-        const result = await internationalTestImportPromotionUseCase.promote(record);
-        if (result.type === 'REJECTED' || result.type === 'FAILED') {
-           return res.status(422).json(result);
-        }
-        return res.status(200).json(result);
+    router.post('/batches/:id/promote', asyncHandler(async (req: Request, res: Response) => {
+      const batchId = req.params.id;
+      if (!importRepository?.getBatchById || !importRepository.listRecords) {
+        return res.status(500).json({ error: 'Import repository batch promotion support is not available' });
       }
-      
-      res.status(422).json({ error: 'Domain promotion is disabled in Phase 06 and must be implemented by the owning domain phase.' });
+
+      const batch = await importRepository.getBatchById(batchId);
+      if (!batch) {
+        return res.status(404).json({ error: 'Batch not found' });
+      }
+      let page = 1;
+      const pageSize = 100;
+      let promoted = 0;
+      let failed = 0;
+      const results: Array<{ recordId?: string; result: unknown }> = [];
+
+      while (true) {
+        const recordsPage = await importRepository.listRecords({ batchId, page, pageSize });
+        for (const record of recordsPage.data) {
+          if (record.status === ImportRecordStatus.PROMOTED) {
+            continue;
+          }
+          const result = await promoteRecord({ ...record, batch });
+          if (result.statusCode >= 200 && result.statusCode < 300) {
+            promoted++;
+          } else {
+            failed++;
+          }
+          if (results.length < 50) {
+            results.push({ recordId: record.id as string | undefined, result: result.body });
+          }
+        }
+
+        if (page * pageSize >= recordsPage.total) {
+          break;
+        }
+        page++;
+      }
+
+      res.status(200).json({
+        batchId,
+        dataType: batch.dataType,
+        promoted,
+        failed,
+        preview: results,
+      });
     }));
 
     // POST /admin/imports/records/:id/transfer
@@ -182,11 +396,11 @@ export class ImportAdminRouter {
       res.status(422).json({ error: 'Domain promotion is disabled in Phase 06 and must be implemented by the owning domain phase.' });
     }));
 
-    router.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation Error', details: err.issues });
       }
-      res.status(400).json({ error: err.message || 'An error occurred' });
+      res.status(400).json({ error: err instanceof Error ? err.message : 'An error occurred' });
     });
 
     return router;

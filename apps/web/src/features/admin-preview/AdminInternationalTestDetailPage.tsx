@@ -523,7 +523,7 @@ export function AdminInternationalTestDetailPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:min-w-[210px]">
-              <InfoPill label="الجهة" value={test.providerName} />
+              <InfoPill label="الجهة" value={test.providerName || 'غير محدد'} />
               <InfoPill label="آخر تحديث" value={test.updatedAt ? new Date(test.updatedAt).toLocaleDateString('ar') : 'غير محدد'} />
             </div>
           </div>
@@ -567,7 +567,7 @@ export function AdminInternationalTestDetailPage() {
             <InfoPanel title="البيانات الأساسية" rows={[
               ['الاختصار', test.abbreviation || '-'],
               ['النوع', familyLabel],
-              ['الجهة المالكة', test.providerName],
+              ['الجهة المالكة', test.providerName || 'غير محدد'],
               ['الحالة', statusLabel(test.status)]
             ]} />
             <InfoPanel title="الدرجات والرسوم" rows={[

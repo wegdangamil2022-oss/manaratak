@@ -72,6 +72,41 @@ export class AcademicTaxonomyAdminRouter {
       existingMappings: z.array(z.any()).optional(),
     });
 
+    const listNodesQuerySchema = z.object({
+      nodeType: nodeTypeSchema.optional(),
+      standardType: standardTypeSchema.optional(),
+      status: statusSchema.optional(),
+      q: z.string().optional(),
+      parentNodeId: z.string().optional(),
+    });
+
+    router.get('/nodes', asyncHandler(async (req: Request, res: Response) => {
+      const filters = listNodesQuerySchema.parse(req.query);
+      res.json({ data: await adminAcademicTaxonomyUseCases.listNodes(filters) });
+    }));
+
+    router.get('/nodes/:nodeId', asyncHandler(async (req: Request, res: Response) => {
+      const node = await adminAcademicTaxonomyUseCases.getNode(req.params.nodeId);
+      if (!node) return res.status(404).json({ error: 'Academic taxonomy node not found' });
+      res.json(node);
+    }));
+
+    router.get('/nodes/:nodeId/children', asyncHandler(async (req: Request, res: Response) => {
+      res.json({ data: await adminAcademicTaxonomyUseCases.listChildren(req.params.nodeId) });
+    }));
+
+    router.get('/nodes/:nodeId/parents', asyncHandler(async (req: Request, res: Response) => {
+      res.json({ data: await adminAcademicTaxonomyUseCases.listParents(req.params.nodeId) });
+    }));
+
+    router.get('/nodes/:nodeId/aliases', asyncHandler(async (req: Request, res: Response) => {
+      res.json({ data: await adminAcademicTaxonomyUseCases.listAliases(req.params.nodeId) });
+    }));
+
+    router.get('/nodes/:nodeId/mappings', asyncHandler(async (req: Request, res: Response) => {
+      res.json({ data: await adminAcademicTaxonomyUseCases.listMappings(req.params.nodeId) });
+    }));
+
     router.post(
       '/nodes/validate',
       asyncHandler(async (req: Request, res: Response) => {

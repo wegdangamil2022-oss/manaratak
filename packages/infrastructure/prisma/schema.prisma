@@ -169,10 +169,251 @@ model Major {
   status              String
   completenessStatus  String
   facultyName         String?
+  academicFieldId     String?
+  disciplineId        String?
+  currentPublishedVersionId String?
   optionalFields      Json?
   
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  academicField       AcademicTaxonomyNode? @relation("MajorAcademicField", fields: [academicFieldId], references: [id], onDelete: SetNull)
+  discipline          AcademicTaxonomyNode? @relation("MajorDiscipline", fields: [disciplineId], references: [id], onDelete: SetNull)
+  currentPublishedVersion MajorVersion? @relation("CurrentPublishedMajorVersion", fields: [currentPublishedVersionId], references: [id], onDelete: SetNull)
+  versions            MajorVersion[] @relation("MajorVersions")
+  levelProfiles       MajorLevelProfile[]
+  aliases             MajorAlias[]
+  sourceRelationships MajorRelationship[] @relation("MajorRelationshipSource")
+  targetRelationships MajorRelationship[] @relation("MajorRelationshipTarget")
+  classificationMappings MajorClassificationMapping[]
+  sources             MajorSource[]
+  fellowships         FellowshipDefinition[] @relation("FellowshipLinkedMajor")
+
+  @@index([status])
+  @@index([completenessStatus])
+  @@index([academicFieldId])
+  @@index([disciplineId])
+  @@index([currentPublishedVersionId])
+  @@index([displayName])
+}
+
+model MajorVersion {
+  id                String   @id @default(uuid())
+  majorId           String
+  profileId         String?
+  versionNumber     Int
+  status            String
+  sourceImportRecordId String?
+  sourceFileName    String?
+  sourceUri         String?
+  sourceHash        String?
+  importedAt        DateTime?
+  publishedAt       DateTime?
+  approvedBy        String?
+  supersededAt      DateTime?
+  changeSummary     Json?
+  rawContentBlocks  Json?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major             Major @relation("MajorVersions", fields: [majorId], references: [id], onDelete: Cascade)
+  profile           MajorLevelProfile? @relation("MajorProfileVersions", fields: [profileId], references: [id], onDelete: Cascade)
+  currentForMajors  Major[] @relation("CurrentPublishedMajorVersion")
+  currentForProfiles MajorLevelProfile[] @relation("CurrentPublishedMajorProfileVersion")
+  contentSections   MajorContentSection[]
+
+  @@unique([majorId, profileId, versionNumber])
+  @@index([majorId])
+  @@index([profileId])
+  @@index([status])
+  @@index([sourceHash])
+  @@index([sourceImportRecordId])
+}
+
+model MajorLevelProfile {
+  id                String   @id @default(uuid())
+  majorId           String
+  level             String
+  code              String?
+  profileType       String?
+  displayName       String?
+  localizedNameAr   String?
+  localizedNameEn   String?
+  collegeContext    String?
+  academicFieldId   String?
+  disciplineId      String?
+  currentPublishedVersionId String?
+  status            String   @default("READY_TO_REVIEW")
+  completenessStatus String  @default("NEEDS_REVIEW")
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major             Major @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  academicField     AcademicTaxonomyNode? @relation("MajorProfileAcademicField", fields: [academicFieldId], references: [id], onDelete: SetNull)
+  discipline        AcademicTaxonomyNode? @relation("MajorProfileDiscipline", fields: [disciplineId], references: [id], onDelete: SetNull)
+  currentPublishedVersion MajorVersion? @relation("CurrentPublishedMajorProfileVersion", fields: [currentPublishedVersionId], references: [id], onDelete: SetNull)
+  versions          MajorVersion[] @relation("MajorProfileVersions")
+  contentSections   MajorContentSection[]
+  sourceRelationships MajorRelationship[] @relation("MajorProfileRelationshipSource")
+  targetRelationships MajorRelationship[] @relation("MajorProfileRelationshipTarget")
+  classificationMappings MajorClassificationMapping[]
+  sources           MajorSource[]
+  fellowships       FellowshipDefinition[] @relation("FellowshipLinkedProfile")
+
+  @@unique([majorId, level, code])
+  @@index([majorId])
+  @@index([level])
+  @@index([status])
+  @@index([completenessStatus])
+  @@index([academicFieldId])
+  @@index([disciplineId])
+  @@index([currentPublishedVersionId])
+}
+
+model MajorContentSection {
+  id                String   @id @default(uuid())
+  profileId         String?
+  versionId         String?
+  sectionKey        String
+  title             String?
+  locale            String?
+  content           String
+  sourceSectionPath String?
+  reviewStatus      String   @default("NEEDS_REVIEW")
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  profile           MajorLevelProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  version           MajorVersion? @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, versionId, sectionKey, locale])
+  @@index([profileId])
+  @@index([versionId])
+  @@index([sectionKey])
+  @@index([reviewStatus])
+}
+
+model MajorAlias {
+  id                String   @id @default(uuid())
+  majorId           String
+  locale            String?
+  alias             String
+  normalizedAlias   String
+  aliasType         String   @default("ALIAS")
+  sourceId          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major             Major @relation(fields: [majorId], references: [id], onDelete: Cascade)
+
+  @@unique([majorId, locale, normalizedAlias, aliasType])
+  @@index([majorId])
+  @@index([normalizedAlias])
+  @@index([locale, normalizedAlias])
+  @@index([aliasType])
+}
+
+model MajorRelationship {
+  id                String   @id @default(uuid())
+  sourceMajorId     String?
+  targetMajorId     String?
+  sourceProfileId   String?
+  targetProfileId   String?
+  relationshipType  String
+  confidence        Float?
+  notes             String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sourceMajor       Major? @relation("MajorRelationshipSource", fields: [sourceMajorId], references: [id], onDelete: Cascade)
+  targetMajor       Major? @relation("MajorRelationshipTarget", fields: [targetMajorId], references: [id], onDelete: Cascade)
+  sourceProfile     MajorLevelProfile? @relation("MajorProfileRelationshipSource", fields: [sourceProfileId], references: [id], onDelete: Cascade)
+  targetProfile     MajorLevelProfile? @relation("MajorProfileRelationshipTarget", fields: [targetProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceMajorId, targetMajorId, sourceProfileId, targetProfileId, relationshipType])
+  @@index([sourceMajorId])
+  @@index([targetMajorId])
+  @@index([sourceProfileId])
+  @@index([targetProfileId])
+  @@index([relationshipType])
+}
+
+model MajorClassificationMapping {
+  id                String   @id @default(uuid())
+  majorId           String?
+  profileId         String?
+  taxonomyNodeId    String
+  relationshipType  String
+  standardType      String?
+  standardCode      String?
+  confidence        Float?
+  notes             String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major             Major? @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  profile           MajorLevelProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  taxonomyNode      AcademicTaxonomyNode @relation("MajorClassificationTaxonomyNode", fields: [taxonomyNodeId], references: [id], onDelete: Restrict)
+
+  @@unique([majorId, profileId, taxonomyNodeId, relationshipType])
+  @@index([majorId])
+  @@index([profileId])
+  @@index([taxonomyNodeId])
+  @@index([relationshipType])
+}
+
+model MajorSource {
+  id                String   @id @default(uuid())
+  majorId           String?
+  profileId         String?
+  sourceType        String
+  sourceName        String
+  sourceUri         String?
+  sourceHash        String?
+  importedAt        DateTime?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major             Major? @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  profile           MajorLevelProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([majorId])
+  @@index([profileId])
+  @@index([sourceType])
+  @@index([sourceHash])
+}
+
+model FellowshipDefinition {
+  id                String   @id @default(uuid())
+  publicId          String   @unique
+  slug              String   @unique
+  canonicalName     String
+  canonicalDedupKey String   @unique
+  displayName       String
+  fellowshipType    String
+  professionalDomain String?
+  status            String   @default("READY_TO_REVIEW")
+  completenessStatus String  @default("NEEDS_REVIEW")
+  linkedMajorId     String?
+  linkedProfileId   String?
+  optionalFields    Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  linkedMajor       Major? @relation("FellowshipLinkedMajor", fields: [linkedMajorId], references: [id], onDelete: SetNull)
+  linkedProfile     MajorLevelProfile? @relation("FellowshipLinkedProfile", fields: [linkedProfileId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([fellowshipType])
+  @@index([professionalDomain])
+  @@index([linkedMajorId])
+  @@index([linkedProfileId])
 }
 
 // --- International Tests ---
@@ -1016,6 +1257,11 @@ model AcademicTaxonomyNode {
   sourceMappings   AcademicStandardMapping[] @relation("AcademicStandardMappingSourceNode")
   targetMappings   AcademicStandardMapping[] @relation("AcademicStandardMappingTargetNode")
   internationalTestRelationships InternationalTestAcademicTaxonomyRelationship[]
+  majorAcademicFieldLinks Major[] @relation("MajorAcademicField")
+  majorDisciplineLinks Major[] @relation("MajorDiscipline")
+  majorProfileAcademicFieldLinks MajorLevelProfile[] @relation("MajorProfileAcademicField")
+  majorProfileDisciplineLinks MajorLevelProfile[] @relation("MajorProfileDiscipline")
+  majorClassificationMappings MajorClassificationMapping[] @relation("MajorClassificationTaxonomyNode")
 
   @@unique([nodeType, canonicalCode, standardType], name: "academicTaxonomyCanonicalKey")
   @@index([nodeType])

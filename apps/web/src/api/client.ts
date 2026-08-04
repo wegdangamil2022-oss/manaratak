@@ -1,3 +1,71 @@
+export interface ReferenceCountryDto {
+  iso2Code: string;
+  iso3Code: string;
+  name: string;
+  officialName?: string | null;
+  region?: string | null;
+  subregion?: string | null;
+  defaultCurrencyCode?: string | null;
+  defaultLanguageCode?: string | null;
+  callingCode?: string | null;
+  flagAssetId?: string | null;
+  isActive: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReferenceCountryFilters {
+  region?: string;
+  q?: string;
+  activeOnly?: boolean;
+}
+
+export type AcademicTaxonomyNodeType = 'ACADEMIC_FIELD' | 'DISCIPLINE' | 'PROGRAM_AREA' | 'SPECIALIZATION_CATEGORY' | 'STANDARD_CLASSIFICATION';
+export type AcademicTaxonomyStatus = 'DRAFT' | 'READY_TO_REVIEW' | 'ACTIVE' | 'ARCHIVED';
+export type AcademicStandardType = 'ISCED' | 'CIP' | 'CUSTOM_NATIONAL';
+
+export interface AcademicTaxonomyNodeDto {
+  nodeId: string;
+  nodeType: AcademicTaxonomyNodeType;
+  canonicalCode: string;
+  canonicalName: string;
+  description?: string;
+  status: AcademicTaxonomyStatus;
+  standardType?: AcademicStandardType;
+  standardCode?: string;
+  localizedNames?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AcademicTaxonomyFilters {
+  q?: string;
+  nodeType?: AcademicTaxonomyNodeType;
+  status?: AcademicTaxonomyStatus;
+  standardType?: AcademicStandardType;
+}
+
+export interface AcademicTaxonomyAliasDto {
+  aliasId: string;
+  nodeId: string;
+  locale?: string;
+  alias: string;
+  normalizedAlias: string;
+  createdAt: string;
+}
+
+export interface AcademicStandardMappingDto {
+  mappingId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceStandard: AcademicStandardType;
+  targetStandard: AcademicStandardType;
+  strength: string;
+  confidence?: number;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface ScholarshipFilters {
   studyCountry?: string;
   degreeLevel?: string;
@@ -485,6 +553,102 @@ export interface PaginatedResult<T> {
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export class ApiClient {
+  static async getReferenceCountries(filters: ReferenceCountryFilters = {}): Promise<ReferenceCountryDto[]> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, String(value));
+      }
+    });
+
+    const res = await fetch(`${API_BASE_URL}/reference-data/countries?${params.toString()}`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch countries');
+    }
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getReferenceCountry(iso2Code: string): Promise<ReferenceCountryDto> {
+    const res = await fetch(`${API_BASE_URL}/reference-data/countries/${encodeURIComponent(iso2Code)}`);
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Country not found');
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch country');
+    }
+    return res.json();
+  }
+
+  static async getAdminReferenceCountries(filters: ReferenceCountryFilters = {}): Promise<ReferenceCountryDto[]> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params.append(key, String(value));
+    });
+    const res = await fetch(`${API_BASE_URL}/admin/reference-data/countries?${params.toString()}`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch admin countries');
+    }
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getAdminReferenceCountry(iso2Code: string): Promise<ReferenceCountryDto> {
+    const res = await fetch(`${API_BASE_URL}/admin/reference-data/countries/${encodeURIComponent(iso2Code)}`);
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Country not found');
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch admin country');
+    }
+    return res.json();
+  }
+
+  static async getAdminAcademicTaxonomyNodes(filters: AcademicTaxonomyFilters = {}): Promise<AcademicTaxonomyNodeDto[]> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.append(key, value);
+    });
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch academic taxonomy nodes');
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getAdminAcademicTaxonomyNode(nodeId: string): Promise<AcademicTaxonomyNodeDto> {
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes/${encodeURIComponent(nodeId)}`);
+    if (!res.ok) throw new Error('Academic taxonomy node not found');
+    return res.json();
+  }
+
+  static async getAdminAcademicTaxonomyChildren(nodeId: string): Promise<AcademicTaxonomyNodeDto[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes/${encodeURIComponent(nodeId)}/children`);
+    if (!res.ok) throw new Error('Failed to fetch taxonomy children');
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getAdminAcademicTaxonomyParents(nodeId: string): Promise<AcademicTaxonomyNodeDto[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes/${encodeURIComponent(nodeId)}/parents`);
+    if (!res.ok) throw new Error('Failed to fetch taxonomy parents');
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getAdminAcademicTaxonomyAliases(nodeId: string): Promise<AcademicTaxonomyAliasDto[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes/${encodeURIComponent(nodeId)}/aliases`);
+    if (!res.ok) throw new Error('Failed to fetch taxonomy aliases');
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
+  static async getAdminAcademicTaxonomyMappings(nodeId: string): Promise<AcademicStandardMappingDto[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/academic-taxonomy/nodes/${encodeURIComponent(nodeId)}/mappings`);
+    if (!res.ok) throw new Error('Failed to fetch taxonomy mappings');
+    const payload = await res.json();
+    return payload.data || [];
+  }
+
   static async search(request: PublicSearchRequest): Promise<PublicSearchResponseDto> {
     const res = await fetch(`${API_BASE_URL}/search`, {
       method: 'POST',
@@ -872,6 +1036,66 @@ export class ApiClient {
     return res.json();
   }
 
+  static async getAdminMajorProfiles(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/profiles`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major profiles');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorContentSections(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/content-sections`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major content sections');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorVersions(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/versions`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major versions');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorSources(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/sources`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major sources');
+    }
+    return res.json();
+  }
+
+  static async importMajorCatalogFromWorkspace(catalogKind: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-catalogs/workspace/${encodeURIComponent(catalogKind)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to import major catalog');
+    }
+    return res.json();
+  }
+
+  static async importMajorDetailDossierFromWorkspace(catalogKind: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/workspace/${encodeURIComponent(catalogKind)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to import major detail dossier');
+    }
+    return res.json();
+  }
+
   static async executeAdminMajorAction(id: string, action: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',
@@ -1114,6 +1338,22 @@ export class ApiClient {
     return res.json();
   }
 
+  static async getImportRecords(params?: { batchId?: string; status?: string; dataType?: string; page?: number; pageSize?: number }): Promise<{ data: any[]; total: number; page: number; pageSize: number }> {
+    const searchParams = new URLSearchParams();
+    if (params?.batchId) searchParams.append('batchId', params.batchId);
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.dataType) searchParams.append('dataType', params.dataType);
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
+
+    const res = await fetch(`${API_BASE_URL}/admin/imports/records?${searchParams.toString()}`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch import records');
+    }
+    return res.json();
+  }
+
   static async promoteImportedRecord(recordId: string): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/admin/scholarships/imported-records/${encodeURIComponent(recordId)}/promote`, {
       method: 'POST',
@@ -1134,6 +1374,18 @@ export class ApiClient {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to promote import record');
+    }
+    return res.json();
+  }
+
+  static async promoteImportBatch(batchId: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/batches/${encodeURIComponent(batchId)}/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to promote import batch');
     }
     return res.json();
   }

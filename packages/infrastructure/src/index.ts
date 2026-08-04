@@ -16,6 +16,7 @@ export class InMemoryWorkflowExecutionGateway {}
 export * from './universities/PrismaUniversityRepository';
 export * from './scholarships/PrismaScholarshipRepository';
 export * from './majors/PrismaMajorRepository';
+export * from './majors/PrismaFellowshipDefinitionRepository';
 export * from './international-tests/PrismaInternationalTestRepository';
 export * from './import-foundation/PrismaImportRepository';
 export * from './import-foundation/InMemoryImportQueueGateway';

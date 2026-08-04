@@ -14,6 +14,7 @@ import {
   AcademicTaxonomyValidationSeverity,
   AcademicTaxonomyValidationIssue,
   AcademicTaxonomySeedBatch,
+  AcademicTaxonomyFilters,
 } from '@manaratak/domain';
 import {
   AcademicTaxonomyImportHandoffService,
@@ -26,6 +27,30 @@ export class AdminAcademicTaxonomyUseCases {
     private readonly validationService: IAcademicTaxonomyValidationService = new AcademicTaxonomyValidationService(),
     private readonly importHandoffService: AcademicTaxonomyImportHandoffService = new AcademicTaxonomyImportHandoffService()
   ) {}
+
+  public listNodes(filters?: AcademicTaxonomyFilters): Promise<AcademicTaxonomyNodeDto[]> {
+    return this.repository.listNodes(filters);
+  }
+
+  public getNode(nodeId: string): Promise<AcademicTaxonomyNodeDto | null> {
+    return this.repository.getNode(nodeId);
+  }
+
+  public listChildren(nodeId: string): Promise<AcademicTaxonomyNodeDto[]> {
+    return this.repository.listChildren(nodeId);
+  }
+
+  public listParents(nodeId: string): Promise<AcademicTaxonomyNodeDto[]> {
+    return this.repository.listParents(nodeId);
+  }
+
+  public listAliases(nodeId: string): Promise<AcademicTaxonomyAliasDto[]> {
+    return this.repository.listAliases(nodeId);
+  }
+
+  public listMappings(nodeId: string): Promise<AcademicStandardMappingDto[]> {
+    return this.repository.listMappings(nodeId);
+  }
 
   public validateNode(
     data: UpsertAcademicTaxonomyNodeDto

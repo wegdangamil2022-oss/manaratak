@@ -62,7 +62,11 @@ import {
   AdminCareersPreviewPage,
   AdminCareerOpportunityDetailPage,
   AdminAiGovernancePreviewPage,
-  AdminSettingsPreviewPage
+  AdminSettingsPreviewPage,
+  AdminStudyDestinationsPage,
+  AdminStudyDestinationDetailPage,
+  AdminAcademicTaxonomyPage,
+  AdminAcademicTaxonomyDetailPage
 } from '../features/admin-preview';
 import { 
   GraduationCap, 
@@ -616,19 +620,19 @@ const router = createBrowserRouter([
       },
       {
         path: 'study-destinations',
-        element: <AdminGenericPreviewPage titleKey="admin_study_destinations" defaultTitle="Study Destinations" descKey="admin_study_destinations_desc" defaultDesc="Manage study destinations." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminStudyDestinationsPage />
       },
       {
         path: 'study-destinations/:countryIso2Code',
-        element: <AdminGenericPreviewPage titleKey="admin_study_destination_detail" defaultTitle="Study Destination Detail" descKey="admin_study_destination_detail_desc" defaultDesc="Manage study destination details." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminStudyDestinationDetailPage />
       },
       {
         path: 'admin/study-destinations',
-        element: <AdminGenericPreviewPage titleKey="admin_study_destinations" defaultTitle="Study Destinations" descKey="admin_study_destinations_desc" defaultDesc="Manage study destinations." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminStudyDestinationsPage />
       },
       {
         path: 'admin/study-destinations/:countryIso2Code',
-        element: <AdminGenericPreviewPage titleKey="admin_study_destination_detail" defaultTitle="Study Destination Detail" descKey="admin_study_destination_detail_desc" defaultDesc="Manage study destination details." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminStudyDestinationDetailPage />
       },
       {
         path: 'admin/scholarships',
@@ -648,11 +652,11 @@ const router = createBrowserRouter([
       },
       {
         path: 'admin/academic-taxonomy',
-        element: <AdminGenericPreviewPage titleKey="admin_academic_taxonomy" defaultTitle="Academic Taxonomy" descKey="admin_academic_taxonomy_desc" defaultDesc="Manage academic taxonomy." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminAcademicTaxonomyPage />
       },
       {
         path: 'admin/academic-taxonomy/:nodeId',
-        element: <AdminGenericPreviewPage titleKey="admin_academic_taxonomy_detail" defaultTitle="Academic Taxonomy Detail" descKey="admin_academic_taxonomy_detail_desc" defaultDesc="Manage academic taxonomy details." statusKey="admin_status_active" defaultStatus="Active" />
+        element: <AdminAcademicTaxonomyDetailPage />
       },
       {
         path: 'admin/majors',

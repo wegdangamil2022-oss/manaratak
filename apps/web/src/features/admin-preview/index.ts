@@ -45,3 +45,5 @@ export * from './AdminCareersPreviewPage';
 export * from './AdminCareerOpportunityDetailPage';
 export * from './AdminAiGovernancePreviewPage';
 export * from './AdminSettingsPreviewPage';
+export * from './AdminStudyDestinationsPages';
+export * from './AdminAcademicTaxonomyPages';

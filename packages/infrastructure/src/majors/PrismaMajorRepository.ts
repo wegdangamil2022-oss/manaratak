@@ -1,32 +1,56 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import {
+  IMajorRepository,
+  MajorContentSectionDto,
+  MajorDto,
+  MajorFilters,
+  MajorLevel,
+  MajorLevelProfileDto,
+  MajorLifecycleStatus,
+  MajorSourceDto,
+  MajorStatus,
+  MajorVersionDto,
+  PaginatedMajorResult,
+  PublicMajorFilters,
+  UpdateMajorDto,
+} from '@manaratak/domain';
 
-export class PrismaMajorRepository {
+export class PrismaMajorRepository implements IMajorRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async findById(id: string): Promise<any | null> {
+  async findById(id: string): Promise<MajorDto | null> {
     const record = await this.prisma.major.findUnique({ where: { id } });
     return record ? this.mapToDto(record) : null;
   }
 
-  async findBySlug(slug: string): Promise<any | null> {
+  async findByPublicId(publicId: string): Promise<MajorDto | null> {
+    const record = await this.prisma.major.findUnique({ where: { publicId } });
+    return record ? this.mapToDto(record) : null;
+  }
+
+  async findBySlug(slug: string): Promise<MajorDto | null> {
     const record = await this.prisma.major.findUnique({ where: { slug } });
     return record ? this.mapToDto(record) : null;
   }
 
-  async findByDedupKey(key: string): Promise<any | null> {
+  async findByDedupKey(key: string): Promise<MajorDto | null> {
     const record = await this.prisma.major.findUnique({ where: { canonicalDedupKey: key } });
     return record ? this.mapToDto(record) : null;
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: Omit<MajorDto, 'id' | 'createdAt' | 'updatedAt'> & Partial<Pick<MajorDto, 'id' | 'createdAt' | 'updatedAt'>>): Promise<MajorDto> {
     const {
-      publicId, slug, canonicalName, canonicalDedupKey, displayName, status, 
-      completenessStatus, facultyName, optionalFields,
+      id: _id, createdAt: _createdAt, updatedAt: _updatedAt,
+      publicId, slug, canonicalName, canonicalDedupKey, displayName, status,
+      completenessStatus, facultyName, academicFieldId, disciplineId, currentPublishedVersionId,
+      optionalFields, profiles: _profiles, versions: _versions, aliases: _aliases,
+      relationships: _relationships, classificationMappings: _classificationMappings,
+      sources: _sources,
       ...rest
     } = data;
     
     const safeOptionalFields = {
-      ...(optionalFields || {}),
+      ...this.asRecord(optionalFields),
       ...rest
     };
 
@@ -34,25 +58,28 @@ export class PrismaMajorRepository {
       data: {
         publicId, slug, canonicalName, canonicalDedupKey, displayName, status, 
         completenessStatus, facultyName,
-        optionalFields: safeOptionalFields
+        academicFieldId,
+        disciplineId,
+        currentPublishedVersionId,
+        optionalFields: safeOptionalFields as Prisma.InputJsonObject
       }
     });
     return this.mapToDto(record);
   }
 
-  async update(id: string, updates: any): Promise<any> {
+  async update(id: string, updates: UpdateMajorDto): Promise<MajorDto> {
     const {
-      id: _id, createdAt, updatedAt, publicId, slug, canonicalName, canonicalDedupKey,
-      displayName, status, completenessStatus, facultyName, optionalFields,
+      displayName, status, completenessStatus, academicFieldId, disciplineId,
+      currentPublishedVersionId, optionalFields,
       ...rest
     } = updates;
     
     const existing = await this.prisma.major.findUnique({ where: { id }});
-    const existingOptional = (existing?.optionalFields as any) || {};
+    const existingOptional = this.asRecord(existing?.optionalFields);
 
     const safeOptionalFields = {
       ...existingOptional,
-      ...(optionalFields || {}),
+      ...this.asRecord(optionalFields),
       ...rest
     };
 
@@ -62,26 +89,62 @@ export class PrismaMajorRepository {
         displayName: displayName !== undefined ? displayName : undefined,
         status: status !== undefined ? status : undefined,
         completenessStatus: completenessStatus !== undefined ? completenessStatus : undefined,
-        facultyName: facultyName !== undefined ? facultyName : undefined,
-        optionalFields: safeOptionalFields
+        academicFieldId: academicFieldId !== undefined ? academicFieldId : undefined,
+        disciplineId: disciplineId !== undefined ? disciplineId : undefined,
+        currentPublishedVersionId: currentPublishedVersionId !== undefined ? currentPublishedVersionId : undefined,
+        optionalFields: safeOptionalFields as Prisma.InputJsonObject
       }
     });
     return this.mapToDto(record);
   }
 
-  async updateStatus(id: string, status: string): Promise<void> {
+  async updateStatus(id: string, status: MajorLifecycleStatus): Promise<void> {
     await this.prisma.major.update({
       where: { id },
       data: { status }
     });
   }
 
-  async list(filters: any): Promise<any> {
+  async updateImportLink(id: string, sourceImportRecordId: string): Promise<void> {
+    const existing = await this.prisma.major.findUnique({ where: { id }});
+    const existingOptional = this.asRecord(existing?.optionalFields);
+
+    await this.prisma.major.update({
+      where: { id },
+      data: {
+        optionalFields: {
+          ...existingOptional,
+          sourceImportRecordId,
+        } as Prisma.InputJsonObject,
+      },
+    });
+  }
+
+  async listByStatus(status: MajorLifecycleStatus): Promise<MajorDto[]> {
+    const records = await this.prisma.major.findMany({
+      where: { status },
+      orderBy: { displayName: 'asc' },
+    });
+
+    return records.map((record) => this.mapToDto(record));
+  }
+
+  async list(filters: MajorFilters): Promise<PaginatedMajorResult<MajorDto>> {
     const page = filters.page || 1;
     const pageSize = filters.pageSize || 20;
     
-    const where: any = {};
+    const where: Prisma.MajorWhereInput = {};
     if (filters.status) where.status = filters.status;
+    if (filters.completenessStatus) where.completenessStatus = filters.completenessStatus;
+    if (filters.academicFieldId) where.academicFieldId = filters.academicFieldId;
+    if (filters.disciplineId) where.disciplineId = filters.disciplineId;
+    if (filters.search) {
+      where.OR = [
+        { displayName: { contains: filters.search, mode: 'insensitive' } },
+        { canonicalName: { contains: filters.search, mode: 'insensitive' } },
+        { slug: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
     
     const [data, total] = await Promise.all([
       this.prisma.major.findMany({
@@ -94,7 +157,7 @@ export class PrismaMajorRepository {
     ]);
     
     return {
-      data: data.map((d: any) => this.mapToDto(d)),
+      data: data.map((record) => this.mapToDto(record)),
       total,
       page,
       pageSize,
@@ -102,15 +165,228 @@ export class PrismaMajorRepository {
     };
   }
 
-  async listPublished(filters: any): Promise<any> {
-    return this.list({ ...filters, status: 'PUBLISHED' });
+  async listPublished(filters: PublicMajorFilters): Promise<PaginatedMajorResult<MajorDto>> {
+    return this.list({ ...filters, status: MajorStatus.PUBLISHED });
   }
 
-  private mapToDto(record: any): any {
+  async createVersion(data: Omit<MajorVersionDto, 'id' | 'createdAt' | 'updatedAt'>): Promise<MajorVersionDto> {
+    const record = await this.prisma.majorVersion.create({
+      data: {
+        majorId: data.majorId ?? '',
+        profileId: data.profileId,
+        versionNumber: data.versionNumber,
+        status: data.status,
+        sourceImportRecordId: data.sourceImportRecordId,
+        sourceFileName: data.sourceFileName,
+        sourceUri: data.sourceUri,
+        sourceHash: data.sourceHash,
+        importedAt: data.importedAt,
+        publishedAt: data.publishedAt,
+        approvedBy: data.approvedBy,
+        supersededAt: data.supersededAt,
+        changeSummary: data.changeSummary as Prisma.InputJsonObject | undefined,
+        rawContentBlocks: data.rawContentBlocks as Prisma.InputJsonObject | undefined,
+        metadata: data.metadata as Prisma.InputJsonObject | undefined,
+      },
+    });
+
+    return this.mapVersionToDto(record);
+  }
+
+  async listVersions(majorId: string): Promise<MajorVersionDto[]> {
+    const records = await this.prisma.majorVersion.findMany({
+      where: { majorId },
+      orderBy: [{ versionNumber: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return records.map((record) => this.mapVersionToDto(record));
+  }
+
+  async createLevelProfile(data: Omit<MajorLevelProfileDto, 'id' | 'createdAt' | 'updatedAt'>): Promise<MajorLevelProfileDto> {
+    const record = await this.prisma.majorLevelProfile.create({
+      data: {
+        majorId: data.majorId ?? '',
+        level: data.level,
+        code: data.code,
+        profileType: data.profileType,
+        displayName: data.displayName,
+        localizedNameAr: data.localizedNameAr,
+        localizedNameEn: data.localizedNameEn,
+        collegeContext: data.collegeContext,
+        academicFieldId: data.academicFieldId,
+        disciplineId: data.disciplineId,
+        currentPublishedVersionId: data.currentPublishedVersionId,
+        status: data.status,
+        completenessStatus: data.completenessStatus,
+        metadata: data.metadata as Prisma.InputJsonObject | undefined,
+      },
+    });
+
+    return this.mapLevelProfileToDto(record);
+  }
+
+  async findLevelProfile(majorId: string, level: MajorLevel, code?: string): Promise<MajorLevelProfileDto | null> {
+    const record = await this.prisma.majorLevelProfile.findFirst({
+      where: {
+        majorId,
+        level,
+        code: code ?? null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return record ? this.mapLevelProfileToDto(record) : null;
+  }
+
+  async listLevelProfiles(majorId: string): Promise<MajorLevelProfileDto[]> {
+    const records = await this.prisma.majorLevelProfile.findMany({
+      where: { majorId },
+      orderBy: [{ level: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    return records.map((record) => this.mapLevelProfileToDto(record));
+  }
+
+  async createContentSections(data: Array<Omit<MajorContentSectionDto, 'id'>>): Promise<{ count: number }> {
+    if (data.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.majorContentSection.createMany({
+      data: data.map((section) => ({
+        profileId: section.profileId,
+        versionId: section.versionId,
+        sectionKey: section.sectionKey,
+        title: section.title,
+        locale: section.locale,
+        content: section.content,
+        sourceSectionPath: section.sourceSectionPath,
+        reviewStatus: section.reviewStatus,
+        metadata: section.metadata as Prisma.InputJsonObject | undefined,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { count: result.count };
+  }
+
+  async listContentSections(majorId: string): Promise<MajorContentSectionDto[]> {
+    const records = await this.prisma.majorContentSection.findMany({
+      where: {
+        OR: [
+          { profile: { majorId } },
+          { version: { majorId } },
+        ],
+      },
+      orderBy: [{ profileId: 'asc' }, { sectionKey: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return records.map((record) => this.mapContentSectionToDto(record));
+  }
+
+  async createSource(data: Omit<MajorSourceDto, 'id' | 'createdAt' | 'updatedAt'>): Promise<MajorSourceDto> {
+    const record = await this.prisma.majorSource.create({
+      data: {
+        majorId: data.majorId,
+        profileId: data.profileId,
+        sourceType: data.sourceType,
+        sourceName: data.sourceName,
+        sourceUri: data.sourceUri,
+        sourceHash: data.sourceHash,
+        importedAt: data.importedAt,
+        metadata: data.metadata as Prisma.InputJsonObject | undefined,
+      },
+    });
+
+    return this.mapSourceToDto(record);
+  }
+
+  async listSources(majorId: string): Promise<MajorSourceDto[]> {
+    const records = await this.prisma.majorSource.findMany({
+      where: { majorId },
+      orderBy: [{ importedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return records.map((record) => this.mapSourceToDto(record));
+  }
+
+  private mapToDto(record: Prisma.MajorGetPayload<Record<string, never>>): MajorDto {
     const { optionalFields, ...rest } = record;
     return {
       ...rest,
-      ...(typeof optionalFields === 'object' && optionalFields ? optionalFields : {})
+      ...this.asRecord(optionalFields),
+      optionalFields: this.asRecord(optionalFields),
+    } as MajorDto;
+  }
+
+  private asRecord(value: Prisma.JsonValue | Record<string, unknown> | null | undefined): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  private mapVersionToDto(record: Prisma.MajorVersionGetPayload<Record<string, never>>): MajorVersionDto {
+    return {
+      ...record,
+      profileId: record.profileId ?? undefined,
+      sourceImportRecordId: record.sourceImportRecordId ?? undefined,
+      sourceFileName: record.sourceFileName ?? undefined,
+      sourceUri: record.sourceUri ?? undefined,
+      sourceHash: record.sourceHash ?? undefined,
+      importedAt: record.importedAt ?? undefined,
+      publishedAt: record.publishedAt ?? undefined,
+      approvedBy: record.approvedBy ?? undefined,
+      supersededAt: record.supersededAt ?? undefined,
+      status: record.status as MajorVersionDto['status'],
+      changeSummary: this.asRecord(record.changeSummary),
+      rawContentBlocks: this.asRecord(record.rawContentBlocks),
+      metadata: this.asRecord(record.metadata),
+    };
+  }
+
+  private mapLevelProfileToDto(record: Prisma.MajorLevelProfileGetPayload<Record<string, never>>): MajorLevelProfileDto {
+    return {
+      ...record,
+      level: record.level as MajorLevelProfileDto['level'],
+      code: record.code ?? undefined,
+      profileType: record.profileType as MajorLevelProfileDto['profileType'],
+      displayName: record.displayName ?? undefined,
+      localizedNameAr: record.localizedNameAr ?? undefined,
+      localizedNameEn: record.localizedNameEn ?? undefined,
+      collegeContext: record.collegeContext ?? undefined,
+      academicFieldId: record.academicFieldId ?? undefined,
+      disciplineId: record.disciplineId ?? undefined,
+      currentPublishedVersionId: record.currentPublishedVersionId ?? undefined,
+      status: record.status as MajorLevelProfileDto['status'],
+      completenessStatus: record.completenessStatus as MajorLevelProfileDto['completenessStatus'],
+      metadata: this.asRecord(record.metadata),
+    };
+  }
+
+  private mapContentSectionToDto(record: Prisma.MajorContentSectionGetPayload<Record<string, never>>): MajorContentSectionDto {
+    return {
+      ...record,
+      profileId: record.profileId ?? undefined,
+      versionId: record.versionId ?? undefined,
+      title: record.title ?? undefined,
+      locale: record.locale ?? undefined,
+      sourceSectionPath: record.sourceSectionPath ?? undefined,
+      reviewStatus: record.reviewStatus as MajorContentSectionDto['reviewStatus'],
+      metadata: this.asRecord(record.metadata),
+    };
+  }
+
+  private mapSourceToDto(record: Prisma.MajorSourceGetPayload<Record<string, never>>): MajorSourceDto {
+    return {
+      ...record,
+      majorId: record.majorId ?? undefined,
+      profileId: record.profileId ?? undefined,
+      sourceUri: record.sourceUri ?? undefined,
+      sourceHash: record.sourceHash ?? undefined,
+      importedAt: record.importedAt ?? undefined,
+      sourceType: record.sourceType as MajorSourceDto['sourceType'],
+      metadata: this.asRecord(record.metadata),
     };
   }
 }

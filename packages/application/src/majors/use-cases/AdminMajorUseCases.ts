@@ -1,10 +1,14 @@
 import {
   IMajorRepository,
+  MajorContentSectionDto,
   MajorCompletenessClassifier,
   MajorDto,
   MajorFilters,
   MajorImportCompletenessState,
+  MajorLevelProfileDto,
+  MajorSourceDto,
   MajorStatus,
+  MajorVersionDto,
   PaginatedMajorResult,
   UpdateMajorDto
 } from '@manaratak/domain';
@@ -24,6 +28,26 @@ export class AdminMajorUseCases {
     return major;
   }
 
+  public async listVersions(id: string): Promise<MajorVersionDto[]> {
+    await this.getMajor(id);
+    return this.repository.listVersions ? this.repository.listVersions(id) : [];
+  }
+
+  public async listLevelProfiles(id: string): Promise<MajorLevelProfileDto[]> {
+    await this.getMajor(id);
+    return this.repository.listLevelProfiles ? this.repository.listLevelProfiles(id) : [];
+  }
+
+  public async listContentSections(id: string): Promise<MajorContentSectionDto[]> {
+    await this.getMajor(id);
+    return this.repository.listContentSections ? this.repository.listContentSections(id) : [];
+  }
+
+  public async listSources(id: string): Promise<MajorSourceDto[]> {
+    await this.getMajor(id);
+    return this.repository.listSources ? this.repository.listSources(id) : [];
+  }
+
   public async updateMajor(id: string, updates: UpdateMajorDto): Promise<MajorDto> {
     const existing = await this.getMajor(id);
 
@@ -33,8 +57,8 @@ export class AdminMajorUseCases {
       sourceClassificationSystem: updates.sourceClassificationSystem ?? existing.sourceClassificationSystem,
       academicFieldOrDiscipline: updates.academicFieldOrDiscipline !== undefined ? updates.academicFieldOrDiscipline || undefined : existing.academicFieldOrDiscipline,
       collegeOrFaculty: updates.collegeOrFaculty !== undefined ? updates.collegeOrFaculty || undefined : existing.collegeOrFaculty,
-      sourceUrl: updates.sourceUrl !== undefined ? updates.sourceUrl || undefined : existing.sourceUrl,
-      officialSourceUrl: updates.officialSourceUrl !== undefined ? updates.officialSourceUrl || undefined : existing.officialSourceUrl,
+      sourceUrl: updates.sourceUrl !== undefined ? updates.sourceUrl || undefined : existing.sourceUrl || undefined,
+      officialSourceUrl: updates.officialSourceUrl !== undefined ? updates.officialSourceUrl || undefined : existing.officialSourceUrl || undefined,
     };
 
     const classification = MajorCompletenessClassifier.classify(payloadForClassification);

@@ -56,6 +56,24 @@ export class ReferenceDataAdminRouter {
       metadata: z.record(z.string(), z.unknown()).optional(),
     });
 
+    const querySchema = z.object({
+      region: z.string().optional(),
+      countryIso2Code: z.string().optional(),
+      q: z.string().optional(),
+      activeOnly: z.coerce.boolean().optional(),
+    });
+
+    router.get('/countries', asyncHandler(async (req: Request, res: Response) => {
+      const filters = querySchema.parse(req.query);
+      res.json({ data: await referenceDataUseCases.listCountries(filters) });
+    }));
+
+    router.get('/countries/:iso2Code', asyncHandler(async (req: Request, res: Response) => {
+      const country = await referenceDataUseCases.getCountry(req.params.iso2Code);
+      if (!country) return res.status(404).json({ error: 'Country not found' });
+      res.json(country);
+    }));
+
     router.put('/countries/:iso2Code', asyncHandler(async (req: Request, res: Response) => {
       const body = countrySchema.parse({ ...req.body, iso2Code: req.params.iso2Code });
       res.json(await referenceDataUseCases.upsertCountry(body));
@@ -76,11 +94,11 @@ export class ReferenceDataAdminRouter {
       res.json(await referenceDataUseCases.upsertCity(body));
     }));
 
-    router.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation Error', details: err.issues });
       }
-      res.status(400).json({ error: err.message || 'An error occurred' });
+      res.status(400).json({ error: err instanceof Error ? err.message : 'An error occurred' });
     });
 
     return router;

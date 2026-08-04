@@ -1,735 +1,437 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useTranslation } from '../../i18n/I18nProvider';
-import { 
-  ArrowLeft, CheckCircle2, AlertCircle, X, ShieldCheck, DownloadCloud,
-  GraduationCap, Globe, Link as LinkIcon, Loader2, Edit3, Archive, Trash2, 
-  BookOpen, Clock, Zap, Sparkles, Code2, Briefcase, Award, Check
+import { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import {
+  ArrowRight,
+  BookOpen,
+  Database,
+  FileText,
+  GitCompare,
+  Globe,
+  Layers3,
+  Loader2,
+  Pencil,
+  ShieldCheck,
+  UploadCloud,
 } from 'lucide-react';
 import { ApiClient } from '../../api/client';
+import { phase10MajorCatalogSamples } from './phase10MajorCatalogSamples';
+import { findPhase10MajorSample, Phase10MajorSample, Phase10MajorSection } from './phase10MajorSamples';
+
+interface MajorDetailState {
+  id: string;
+  displayName: string;
+  nameAr?: string;
+  nameEn?: string;
+  code?: string;
+  degreeLevel?: string;
+  collegeOrField?: string;
+  status: string;
+  completenessStatus?: string;
+  sourceFileName?: string;
+  sourceType?: string;
+}
+
+interface MajorProfileLike {
+  id?: string;
+  level?: string;
+  code?: string;
+  displayName?: string;
+  collegeContext?: string;
+  status?: string;
+  completenessStatus?: string;
+}
+
+interface MajorVersionLike {
+  id?: string;
+  versionNumber?: number;
+  status?: string;
+  sourceFileName?: string;
+  sourceHash?: string;
+  importedAt?: string;
+}
+
+interface MajorSourceLike {
+  id?: string;
+  sourceType?: string;
+  sourceName?: string;
+  sourceHash?: string;
+  importedAt?: string;
+}
+
+type DetailTab = 'basic' | 'profile' | 'content' | 'sources';
+
+const tabs: Array<{ id: DetailTab; label: string; icon: typeof BookOpen }> = [
+  { id: 'basic', label: 'البيانات الأساسية', icon: BookOpen },
+  { id: 'profile', label: 'ملف الدرجة', icon: Layers3 },
+  { id: 'content', label: 'المحتوى التفصيلي', icon: FileText },
+  { id: 'sources', label: 'المصادر والنسخ', icon: GitCompare },
+];
+
+function normalizeMajor(value: Record<string, unknown>, id: string): MajorDetailState {
+  const optionalFields = typeof value.optionalFields === 'object' && value.optionalFields ? value.optionalFields as Record<string, unknown> : {};
+  const localizedNames = typeof optionalFields.localizedNames === 'object' && optionalFields.localizedNames
+    ? optionalFields.localizedNames as Record<string, unknown>
+    : {};
+  const metadata = typeof optionalFields.metadata === 'object' && optionalFields.metadata ? optionalFields.metadata as Record<string, unknown> : {};
+
+  return {
+    id: String(value.id ?? id),
+    displayName: String(value.displayName ?? value.canonicalName ?? localizedNames.ar ?? localizedNames.en ?? 'تخصص بدون اسم'),
+    nameAr: typeof localizedNames.ar === 'string' ? localizedNames.ar : undefined,
+    nameEn: typeof localizedNames.en === 'string' ? localizedNames.en : undefined,
+    code: typeof value.classificationCode === 'string' ? value.classificationCode : undefined,
+    degreeLevel: typeof value.degreeLevel === 'string' ? value.degreeLevel : undefined,
+    collegeOrField: typeof value.academicFieldOrDiscipline === 'string'
+      ? value.academicFieldOrDiscipline
+      : typeof value.collegeOrFaculty === 'string'
+        ? value.collegeOrFaculty
+        : undefined,
+    status: String(value.status ?? 'READY_TO_REVIEW'),
+    completenessStatus: typeof value.completenessStatus === 'string' ? value.completenessStatus : undefined,
+    sourceType: typeof metadata.sourceImportMode === 'string' ? metadata.sourceImportMode : undefined,
+  };
+}
+
+function sampleToMajor(sample: Phase10MajorSample): MajorDetailState {
+  return {
+    id: sample.id,
+    displayName: sample.nameAr,
+    nameAr: sample.nameAr,
+    nameEn: sample.nameEn,
+    code: sample.code,
+    degreeLevel: sample.degreeLevel,
+    collegeOrField: sample.collegeOrField,
+    status: sample.status,
+    completenessStatus: sample.completenessStatus,
+    sourceFileName: sample.sourceFileName,
+    sourceType: sample.sourceType,
+  };
+}
+
+function statusLabel(value: string | undefined): string {
+  const map: Record<string, string> = {
+    READY_TO_REVIEW: 'تحتاج مراجعة',
+    NEEDS_REVIEW: 'تحتاج مراجعة',
+    IMPORTED: 'مستوردة',
+    READY_TO_PUBLISH: 'جاهزة للنشر',
+    PUBLISHED: 'منشورة',
+    ARCHIVED: 'مؤرشفة',
+  };
+  return value ? map[value] ?? value : 'غير محدد';
+}
+
+function degreeLabel(value: string | undefined): string {
+  const map: Record<string, string> = {
+    Bachelor: 'بكالوريوس',
+    Master: 'ماجستير',
+    Doctorate: 'دكتوراه',
+    Fellowship: 'زمالة',
+  };
+  return value ? map[value] ?? value : 'غير محدد';
+}
+
+function FieldCard({ label, value }: { label: string; value?: string | number }) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <span className="block text-[12px] font-bold text-slate-400">{label}</span>
+      <span className="mt-1 block break-words text-[14px] font-extrabold leading-6 text-slate-900">{value || 'غير محدد'}</span>
+    </div>
+  );
+}
 
 export function AdminMajorDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { t, language } = useTranslation();
-  const dir = language === 'ar' ? 'rtl' : 'ltr';
-  
-  const [major, setMajor] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const demoUnlocked = localStorage.getItem('manaratak_demo_role') === 'admin';
+  const detailSample = findPhase10MajorSample(id);
+  const catalogSample = phase10MajorCatalogSamples.find((major) => major.id === id || major.code === id);
+  const sample = detailSample ?? catalogSample;
+  const [activeTab, setActiveTab] = useState<DetailTab>('basic');
+  const [major, setMajor] = useState<MajorDetailState | null>(sample ? sampleToMajor(sample) : null);
+  const [profiles, setProfiles] = useState<MajorProfileLike[]>(sample ? [{
+    id: `${sample.id}-profile`,
+    level: sample.degreeLevel,
+    code: sample.code,
+    displayName: sample.nameAr,
+    collegeContext: sample.collegeOrField,
+    status: sample.status,
+    completenessStatus: sample.completenessStatus,
+  }] : []);
+  const [sections, setSections] = useState<Phase10MajorSection[]>(sample?.contentSections ?? []);
+  const [versions, setVersions] = useState<MajorVersionLike[]>(sample ? [{
+    id: `${sample.id}-version-1`,
+    versionNumber: 1,
+    status: 'NEEDS_REVIEW',
+    sourceFileName: sample.sourceFileName,
+    importedAt: sample.updatedAt,
+  }] : []);
+  const [sources, setSources] = useState<MajorSourceLike[]>(sample ? [{
+    id: `${sample.id}-source-1`,
+    sourceType: sample.sourceType,
+    sourceName: sample.sourceFileName,
+    importedAt: sample.updatedAt,
+  }] : []);
+  const [loading, setLoading] = useState(!sample);
+  const [usingSample, setUsingSample] = useState(Boolean(sample));
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('overview');
-
-  // Missing fields fetch preview modal
-  const [showFetchModal, setShowFetchModal] = useState(false);
-  const [fetchLoading, setFetchLoading] = useState(false);
-  const [suggestedFields, setSuggestedFields] = useState<any>(null);
-
-  // AI Description suggestion modal
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiDraft, setAiDraft] = useState<string | null>(null);
-
-  // Delete confirmation
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
-    if (id) loadData(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (!demoUnlocked || !id || sample) return;
 
-  const loadData = async (majorId: string) => {
-    setLoading(true);
-    try {
-      const data = await ApiClient.getAdminMajorById(majorId);
-      setMajor(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load major details');
-    } finally {
-      setLoading(false);
+    let cancelled = false;
+    const majorId = id;
+    async function loadDetail() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [majorResult, profileResult, sectionResult, versionResult, sourceResult] = await Promise.all([
+          ApiClient.getAdminMajorById(majorId),
+          ApiClient.getAdminMajorProfiles(majorId),
+          ApiClient.getAdminMajorContentSections(majorId),
+          ApiClient.getAdminMajorVersions(majorId),
+          ApiClient.getAdminMajorSources(majorId),
+        ]);
+        if (cancelled) return;
+        setMajor(normalizeMajor(majorResult as Record<string, unknown>, majorId));
+        setProfiles(Array.isArray(profileResult.data) ? profileResult.data as MajorProfileLike[] : []);
+        setSections(Array.isArray(sectionResult.data) ? sectionResult.data as Phase10MajorSection[] : []);
+        setVersions(Array.isArray(versionResult.data) ? versionResult.data as MajorVersionLike[] : []);
+        setSources(Array.isArray(sourceResult.data) ? sourceResult.data as MajorSourceLike[] : []);
+        setUsingSample(false);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل تفاصيل التخصص.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  };
 
-  const handleAction = async (action: string) => {
-    if (!id) return;
-    if (action === 'DELETE') {
-      setShowDeleteConfirm(true);
-      return;
-    }
-    setActionLoading(action);
-    setError(null);
-    try {
-      await ApiClient.executeAdminMajorAction(id, action.toLowerCase());
-      setSuccessMsg(`Action ${action} executed successfully`);
-      await loadData(id);
-    } catch (err: any) {
-      setError(err.message || `Failed to execute ${action}`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
+    void loadDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoUnlocked, id, sample]);
 
-  const executeDelete = async () => {
-    if (!id) return;
-    setActionLoading('DELETE');
-    try {
-      await ApiClient.executeAdminMajorAction(id, 'archive'); // Fallback to archive
-      navigate('/admin/majors');
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete major');
-      setShowDeleteConfirm(false);
-      setActionLoading(null);
-    }
-  };
+  const contentGroups = useMemo(() => {
+    const important = sections.slice(0, 6);
+    const remaining = sections.slice(6);
+    return { important, remaining };
+  }, [sections]);
 
-  // Rule 6: Fetch Missing Fields from Trusted Source
-  const handleFetchMissingFields = () => {
-    setShowFetchModal(true);
-    setFetchLoading(true);
-    setTimeout(() => {
-      setSuggestedFields({
-        cipCode: '11.0701',
-        iscedCode: '0613',
-        sourceClassification: 'NCES CIP 2020 / ISCED-F 2013',
-        acquiredSkills: ['Problem Solving', 'Algorithm Design', 'Software Engineering', 'Database Management'],
-        careerPaths: ['Software Engineer', 'Data Analyst', 'Systems Architect', 'DevOps Specialist'],
-        typicalCourses: ['Data Structures', 'Operating Systems', 'Algorithms', 'Web Development'],
-        relatedJobs: ['Full Stack Developer', 'Cloud Architect'],
-        missingFieldsList: ['CIP Code', 'ISCED Code', 'Acquired Skills', 'Typical Courses'],
-        sourceSystem: 'NCES CIP & ISCED Taxonomy Repositories',
-        status: 'Preview / Requires Confirmation'
-      });
-      setFetchLoading(false);
-    }, 1200);
-  };
-
-  const applySuggestedFields = async () => {
-    if (!id || !suggestedFields) return;
-    setFetchLoading(true);
-    try {
-      // Apply missing fields safely
-      setSuccessMsg('Missing fields enriched successfully from trusted sources');
-      setShowFetchModal(false);
-      await loadData(id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to apply fields');
-    } finally {
-      setFetchLoading(false);
-    }
-  };
-
-  // Rule 7: Suggest Student-Friendly Description via AI (Phase 17 draft generation)
-  const handleGenerateAiDescription = () => {
-    setShowAiModal(true);
-    setAiLoading(true);
-    setTimeout(() => {
-      setAiDraft(
-        'هذا التخصص يقدم للطلاب فهمًا شاملاً لأساسيات وتطبيقات علوم الحاسوب، مع تركيز خاص على تحليل البيانات والذكاء الاصطناعي وتطوير البرمجيات. يهدف إلى إعداد خريجين قادرين على ابتكار حلول تقنية متطورة لتلبية احتياجات سوق العمل الرقمي السريع النمو.'
-      );
-      setAiLoading(false);
-    }, 1500);
-  };
-
-  const approveAiDraft = async () => {
-    if (!id || !aiDraft) return;
-    setAiLoading(true);
-    try {
-      // Save AI draft as reviewed content
-      setSuccessMsg('AI draft approved and saved as description');
-      setShowAiModal(false);
-      await loadData(id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save AI description');
-    } finally {
-      setAiLoading(false);
-    }
-  };
+  if (!demoUnlocked) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (loading) {
     return (
-      <div className="p-20 flex flex-col items-center justify-center text-slate-500">
-        <Loader2 className="w-8 h-8 animate-spin mb-4 text-blue-600" />
-        <span className="text-sm">Loading major details...</span>
-      </div>
+      <main dir="rtl" className="flex min-h-screen items-center justify-center bg-[#f7f8fa] text-slate-500" style={{ fontFamily: "'Cairo', sans-serif" }}>
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-700" />
+          <span className="text-[13px] font-bold">جاري تحميل تفاصيل التخصص...</span>
+        </div>
+      </main>
     );
   }
 
-  if (error && !major) {
+  if (!major) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="p-6 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl flex flex-col items-center text-center">
-          <AlertCircle className="w-10 h-10 text-rose-600 mb-3" />
-          <h2 className="text-lg font-bold mb-1">Failed to load</h2>
-          <p className="text-sm mb-4">{error}</p>
-          <Link to="/admin/majors" className="text-sm font-bold text-rose-700 underline">Back to List</Link>
+      <main dir="rtl" className="min-h-screen bg-[#f7f8fa] px-4 py-6" style={{ fontFamily: "'Cairo', sans-serif" }}>
+        <div className="mx-auto max-w-3xl rounded-2xl border border-rose-200 bg-white p-6 text-center">
+          <p className="text-[14px] font-extrabold text-rose-700">لم يتم العثور على التخصص.</p>
+          <Link to="/admin/majors" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-[13px] font-bold text-white">العودة للقائمة</Link>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className={`max-w-7xl mx-auto px-4 py-8 space-y-8 ${dir === 'rtl' ? 'rtl text-right' : 'ltr text-left'}`} dir={dir}>
-      {/* Breadcrumbs */}
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-        <Link to="/admin/majors" className="hover:text-blue-600 transition-colors flex items-center gap-1">
-          <ArrowLeft className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
-          <span>{dir === 'rtl' ? 'التخصصات الأكاديمية' : 'Academic Majors'}</span>
+    <main dir="rtl" className="min-h-screen bg-[#f7f8fa] px-4 py-5 text-slate-900 sm:px-6 lg:px-10" style={{ fontFamily: "'Cairo', sans-serif" }}>
+      <div className="mx-auto max-w-7xl space-y-5">
+        <Link to="/admin/majors" className="inline-flex items-center gap-2 text-[13px] font-extrabold text-slate-600 hover:text-emerald-800">
+          <ArrowRight className="h-4 w-4" />
+          العودة إلى التخصصات
         </Link>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-900 font-extrabold">{major.displayName}</span>
-      </div>
 
-      {/* Header Identity Block */}
-      <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-md border border-slate-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg">
-                {major.cipCode ? `CIP: ${major.cipCode}` : 'CIP_PENDING'}
-              </span>
-              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
-                major.status === 'PUBLISHED' 
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' 
-                  : 'bg-amber-500/15 text-amber-400 border-amber-500/20'
-              }`}>
-                {major.status || 'DRAFT'}
-              </span>
-              {major.jobDemandLevel && (
-                <span className="bg-amber-500/15 text-amber-300 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-                  <Award className="w-3.5 h-3.5" />
-                  <span>{major.jobDemandLevel} Demand</span>
-                </span>
-              )}
+        <header className="rounded-3xl bg-[#071322] p-5 text-white shadow-lg sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-[12px] font-bold">{major.code ?? 'NO-CODE'}</span>
+                <span className="rounded-lg bg-emerald-400/15 px-2.5 py-1 text-[12px] font-bold text-emerald-200">{degreeLabel(major.degreeLevel)}</span>
+                <span className="rounded-lg bg-blue-400/15 px-2.5 py-1 text-[12px] font-bold text-blue-200">{statusLabel(major.status)}</span>
+              </div>
+              <h1 className="mt-4 text-2xl font-black leading-9 sm:text-4xl">{major.displayName}</h1>
+              {major.nameEn && <p dir="ltr" className="mt-2 text-right text-[14px] font-semibold text-slate-300">{major.nameEn}</p>}
+              <p className="mt-3 max-w-3xl text-[13px] leading-7 text-slate-300">
+                صفحة موحدة تعرض التفاصيل حسب نوع الدرجة. لا يتم فرض أقسام البكالوريوس على الماجستير أو الدكتوراه أو الزمالة.
+              </p>
             </div>
-            
-            <h1 className="text-2xl md:text-3.5xl font-black tracking-tight leading-tight">
-              {major.displayName}
-            </h1>
-            
-            <p className="text-slate-400 text-xs md:text-sm font-medium">
-              {major.nameEn || major.originalName} • {major.degreeLevel || 'Bachelor'} Degree
-            </p>
-          </div>
 
-          {/* Action Group */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {major.status === 'PUBLISHED' ? (
-              <button 
-                onClick={() => handleAction('UNPUBLISH')}
-                disabled={!!actionLoading}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5"
-              >
-                <Archive className="w-4 h-4" />
-                <span>{dir === 'rtl' ? 'إلغاء النشر' : 'Unpublish'}</span>
-              </button>
-            ) : (
-              <button 
-                onClick={() => handleAction('PUBLISH')}
-                disabled={!!actionLoading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-              >
-                <Globe className="w-4 h-4" />
-                <span>{dir === 'rtl' ? 'نشر التخصص' : 'Publish Major'}</span>
-              </button>
-            )}
+            <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4 lg:min-w-[460px]">
+              <FieldCard label="أقسام التفاصيل" value={sections.length} />
+              <FieldCard label="النسخ" value={versions.length} />
+              <FieldCard label="المصادر" value={sources.length} />
+              <FieldCard label="المراجعة" value={statusLabel(major.completenessStatus)} />
+            </div>
+          </div>
+        </header>
 
-            {major.status === 'PUBLISHED' && (
-              <a
-                href={`/majors/${major.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
-              >
-                <Globe className="w-4 h-4" />
-                <span>{dir === 'rtl' ? 'عرض الصفحة العامة' : 'Public Page'}</span>
-              </a>
-            )}
+        {usingSample && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[12px] leading-6 text-amber-900">
+            {sections.length > 0
+              ? `هذه تفاصيل معاينة من ملف المرحلة 10: ${major.sourceFileName}. بعد استيراد السجلات واعتمادها ستظهر نفس الأقسام من قاعدة البيانات.`
+              : `هذا التخصص موجود في كتالوج المرحلة 10: ${major.sourceFileName}. لم يتم إرفاق ملف تفاصيل له بعد.`}
           </div>
-        </div>
+        )}
 
-        {/* Header Specs Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-800/80 text-xs">
-          <div>
-            <span className="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">{dir === 'rtl' ? 'المستوى الدراسي' : 'Degree Level'}</span>
-            <span className="font-bold text-slate-200 text-sm">{major.degreeLevel || 'Bachelor'}</span>
+        {error && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[12px] leading-6 text-rose-800">
+            {error}
           </div>
-          <div>
-            <span className="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">{dir === 'rtl' ? 'المجال الأكاديمي' : 'Academic Field'}</span>
-            <span className="font-bold text-emerald-400 text-sm">{major.collegeOrField || 'N/A'}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">{dir === 'rtl' ? 'مستوى الطلب المهني' : 'Market Demand'}</span>
-            <span className="font-bold text-indigo-400 text-sm">{major.jobDemandLevel || 'High'}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">{dir === 'rtl' ? 'تصنيف الكود الدولي' : 'ISCED Code'}</span>
-            <span className="font-bold text-amber-400 text-sm">{major.iscedCode || '0613'}</span>
-          </div>
-        </div>
-      </div>
+        )}
 
-      {/* Messages */}
-      {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-2xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-900"><X className="w-4 h-4" /></button>
-        </div>
-      )}
-
-      {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 text-xs rounded-2xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <button onClick={() => setError(null)} className="text-rose-700 hover:text-rose-900"><X className="w-4 h-4" /></button>
-        </div>
-      )}
-
-      {/* Split Content Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        {/* Left Columns - Details & Tabs */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Navigation Tabs */}
-          <div className="border-b border-slate-200 overflow-x-auto scrollbar-none">
-            <nav className="flex space-x-2 rtl:space-x-reverse min-w-max pb-1">
-              {[
-                { id: 'overview', labelAr: 'الملف الأكاديمي والتعريفي', labelEn: 'Overview & Profile' },
-                { id: 'curriculum', labelAr: 'المناهج والمهارات المكتسبة', labelEn: 'Curriculum & Skills' },
-                { id: 'career', labelAr: 'الفرص الوظيفية والطلب', labelEn: 'Career Outlook' },
-                { id: 'universities', labelAr: 'الجامعات والمنح المرتبطة', labelEn: 'Universities & Scholarships' }
-              ].map((tab) => {
-                const isActive = activeTab === tab.id;
+        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+          <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-2 px-2 text-[12px] font-extrabold text-slate-400">أقسام ملف التخصص</div>
+            <nav className="grid gap-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const selected = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-3 px-4 text-xs font-bold transition-all relative border-b-2 whitespace-nowrap ${
-                      isActive
-                        ? 'border-indigo-600 text-slate-900'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex min-h-11 items-center gap-2 rounded-xl px-3 text-right text-[13px] font-extrabold ${selected ? 'bg-emerald-50 text-emerald-900' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
-                    {dir === 'rtl' ? tab.labelAr : tab.labelEn}
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
                   </button>
                 );
               })}
             </nav>
-          </div>
+          </aside>
 
-          {/* Active Panel */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm">
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="border-b border-slate-100 pb-3 flex justify-between items-center gap-4">
-                  <h3 className="text-md font-bold text-slate-900">{dir === 'rtl' ? 'ملف التخصص والمسميات الأكاديمية' : 'Major Identity Specifications'}</h3>
-                  
-                  {/* AI Description Suggestion Trigger */}
-                  <button
-                    onClick={handleGenerateAiDescription}
-                    className="text-xs text-indigo-700 hover:text-indigo-800 font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                    <span>{dir === 'rtl' ? 'توليد نبذة ذكية بالذكاء الاصطناعي' : 'Generate AI Description'}</span>
-                  </button>
-                </div>
-
-                {/* Details Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-                  <div>
-                    <span className="text-slate-400 block mb-1 font-bold uppercase">{dir === 'rtl' ? 'الاسم الأصلي المكتشف' : 'Original Source Name'}</span>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 font-mono text-slate-700 truncate">{major.originalName || (dir === 'rtl' ? 'قيد الإضافة' : 'Pending')}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block mb-1 font-bold uppercase">{dir === 'rtl' ? 'المسمى باللغة الإنجليزية' : 'English Academic Title'}</span>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 font-semibold text-slate-900">{major.nameEn || (dir === 'rtl' ? 'قيد الإضافة' : 'Pending')}</div>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
-                  <span className="text-slate-400 block font-bold uppercase mb-2">{dir === 'rtl' ? 'نبذة تعريفية مبسطة للطلاب' : 'Student-Friendly Description'}</span>
-                  <p className="text-slate-700 leading-relaxed font-medium">
-                    {major.description || (dir === 'rtl' ? 'قيد الإضافة' : 'Pending')}
-                  </p>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            {activeTab === 'basic' && (
+              <div className="space-y-4">
+                <h2 className="text-[18px] font-black">البيانات الأساسية</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FieldCard label="الاسم العربي" value={major.nameAr ?? major.displayName} />
+                  <FieldCard label="الاسم الإنجليزي" value={major.nameEn} />
+                  <FieldCard label="الرمز" value={major.code} />
+                  <FieldCard label="الدرجة" value={degreeLabel(major.degreeLevel)} />
+                  <FieldCard label="المجال/الكلية" value={major.collegeOrField} />
+                  <FieldCard label="حالة النشر" value={statusLabel(major.status)} />
                 </div>
               </div>
             )}
 
-            {activeTab === 'curriculum' && (
-              <div className="space-y-6">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-md font-bold text-slate-900">{dir === 'rtl' ? 'المناهج الدراسية والمهارات الأساسية المكتسبة' : 'Curriculum & Core Skills'}</h3>
-                </div>
-
-                <div className="space-y-6 text-xs">
-                  {/* Acquired Skills */}
-                  <div>
-                    <span className="text-slate-400 block mb-2.5 font-bold uppercase">{dir === 'rtl' ? 'المهارات والقدرات المكتسبة للطلاب' : 'Acquired Student Skills'}</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(major.acquiredSkills || ['Problem Solving', 'Data Analysis', 'Software Architecture', 'Critical Thinking']).map((skill: string, idx: number) => (
-                        <span key={idx} className="px-3 py-1.5 bg-indigo-50 border border-indigo-100/50 text-indigo-900 font-bold rounded-xl text-[11px]">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Typical Courses */}
-                  <div>
-                    <span className="text-slate-400 block mb-2.5 font-bold uppercase">{dir === 'rtl' ? 'المواد والمناهج الدراسية النموذجية' : 'Typical Courses & Core Subjects'}</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(major.typicalCourses || ['Algorithms', 'Data Structures', 'Database Systems', 'Software Engineering']).map((course: string, idx: number) => (
-                        <span key={idx} className="px-3 py-1.5 bg-slate-50 border border-slate-100 text-slate-800 font-bold rounded-xl text-[11px]">
-                          {course}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+            {activeTab === 'profile' && (
+              <div className="space-y-4">
+                <h2 className="text-[18px] font-black">ملف الدرجة</h2>
+                <div className="grid gap-3">
+                  {profiles.length === 0 ? (
+                    <p className="rounded-2xl bg-slate-50 p-4 text-[13px] text-slate-500">لم يتم إنشاء ملف درجة بعد.</p>
+                  ) : profiles.map((profile) => (
+                    <article key={profile.id ?? profile.code} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-white px-2 py-1 font-mono text-[12px] font-bold">{profile.code ?? major.code}</span>
+                        <span className="rounded-lg bg-emerald-100 px-2 py-1 text-[12px] font-bold text-emerald-800">{degreeLabel(profile.level ?? major.degreeLevel)}</span>
+                      </div>
+                      <h3 className="mt-3 text-[15px] font-black">{profile.displayName ?? major.displayName}</h3>
+                      <p className="mt-1 text-[13px] text-slate-500">السياق: {profile.collegeContext ?? major.collegeOrField ?? 'غير محدد'}</p>
+                    </article>
+                  ))}
                 </div>
               </div>
             )}
 
-            {activeTab === 'career' && (
-              <div className="space-y-6">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-md font-bold text-slate-900">{dir === 'rtl' ? 'الفرص المهنية والمستقبل الوظيفي للتخصص' : 'Career Outlook & Market Fit'}</h3>
+            {activeTab === 'content' && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-[18px] font-black">المحتوى التفصيلي</h2>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-bold text-slate-600">{sections.length} قسم محفوظ</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-                  <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100">
-                    <span className="text-emerald-950 block font-bold uppercase mb-2 flex items-center gap-1.5">
-                      <Briefcase className="w-4 h-4 text-emerald-600" />
-                      <span>{dir === 'rtl' ? 'المسارات المهنية والتوظيفية' : 'Career Pathways'}</span>
-                    </span>
-                    <ul className="space-y-1.5 list-disc pl-4 rtl:pl-0 rtl:pr-4 text-slate-700 font-medium leading-relaxed">
-                      {(major.careerPaths || ['Software Development', 'Data Engineering', 'Systems Analysis']).map((cp: string, idx: number) => (
-                        <li key={idx}>{cp}</li>
+                {sections.length === 0 ? (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-[13px] text-slate-500">لا توجد أقسام تفاصيل لهذا التخصص بعد.</p>
+                ) : (
+                  <>
+                    <div className="grid gap-3">
+                      {contentGroups.important.map((section) => (
+                        <article key={section.sectionKey} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-[15px] font-black leading-7">{section.title}</h3>
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">{statusLabel(section.reviewStatus)}</span>
+                          </div>
+                          <p className="mt-2 text-[13px] leading-7 text-slate-600">{section.content}</p>
+                        </article>
                       ))}
-                    </ul>
-                  </div>
+                    </div>
 
-                  <div className="p-4 bg-blue-50/40 rounded-2xl border border-blue-100">
-                    <span className="text-blue-950 block font-bold uppercase mb-2 flex items-center gap-1.5">
-                      <Code2 className="w-4 h-4 text-blue-600" />
-                      <span>{dir === 'rtl' ? 'الوظائف والمهن المرتبطة' : 'Linked Job Titles'}</span>
-                    </span>
-                    <ul className="space-y-1.5 list-disc pl-4 rtl:pl-0 rtl:pr-4 text-slate-700 font-medium leading-relaxed">
-                      {(major.relatedJobs || ['Backend Engineer', 'Solutions Architect']).map((rj: string, idx: number) => (
-                        <li key={idx}>{rj}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
+                    {contentGroups.remaining.length > 0 && (
+                      <div>
+                        <h3 className="mb-2 text-[14px] font-black text-slate-700">أقسام إضافية من الملف</h3>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {contentGroups.remaining.map((section) => (
+                            <div key={section.sectionKey} className="rounded-xl border border-slate-100 bg-white p-3">
+                              <span className="text-[13px] font-extrabold text-slate-800">{section.title}</span>
+                              <p className="mt-1 line-clamp-2 text-[12px] leading-6 text-slate-500">{section.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
-            {activeTab === 'universities' && (
-              <div className="space-y-6">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-md font-bold text-slate-900">{dir === 'rtl' ? 'إحصاءات الارتباط مع الجامعات والمنح' : 'Connected Entities Statistics'}</h3>
+            {activeTab === 'sources' && (
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <h2 className="flex items-center gap-2 text-[18px] font-black"><UploadCloud className="h-5 w-5 text-emerald-700" /> المصادر</h2>
+                  {sources.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-[13px] text-slate-500">لا توجد مصادر.</p> : sources.map((source) => (
+                    <article key={source.id ?? source.sourceName} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-[13px]">
+                      <p className="font-extrabold text-slate-900">{source.sourceName ?? major.sourceFileName ?? 'مصدر غير محدد'}</p>
+                      <p className="mt-1 text-slate-500">النوع: {source.sourceType ?? major.sourceType ?? 'غير محدد'}</p>
+                      {source.sourceHash && <p className="mt-1 break-all font-mono text-[11px] text-slate-400">البصمة: {source.sourceHash}</p>}
+                    </article>
+                  ))}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between gap-4">
-                    <div>
-                      <h4 className="font-bold text-slate-900 mb-0.5">{dir === 'rtl' ? 'الجامعات التي تتيح هذا التخصص' : 'Offering Universities'}</h4>
-                      <p className="text-[11px] text-slate-500">{major.universitiesOfferingCount || '14'} Universities offering this specialization</p>
-                    </div>
-                    <span className="text-lg font-black text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl">
-                      {major.universitiesOfferingCount || '14'}
-                    </span>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between gap-4">
-                    <div>
-                      <h4 className="font-bold text-slate-900 mb-0.5">{dir === 'rtl' ? 'المنح الدراسية المرتبطة بالتخصص' : 'Linked Scholarships'}</h4>
-                      <p className="text-[11px] text-slate-500">{major.linkedScholarshipsCount || '8'} Scholarships available for this discipline</p>
-                    </div>
-                    <span className="text-lg font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-xl">
-                      {major.linkedScholarshipsCount || '8'}
-                    </span>
-                  </div>
+                <div className="space-y-3">
+                  <h2 className="flex items-center gap-2 text-[18px] font-black"><Database className="h-5 w-5 text-blue-700" /> النسخ والتغييرات</h2>
+                  {versions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-[13px] text-slate-500">لا توجد نسخ.</p> : versions.map((version) => (
+                    <article key={version.id ?? version.versionNumber} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-[13px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-extrabold text-slate-900">نسخة {version.versionNumber ?? 1}</p>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">{statusLabel(version.status)}</span>
+                      </div>
+                      <p className="mt-1 text-slate-500">{version.sourceFileName ?? major.sourceFileName ?? 'ملف غير محدد'}</p>
+                    </article>
+                  ))}
                 </div>
               </div>
             )}
-          </div>
+          </section>
         </div>
 
-        {/* Right Column - Side Contextual Panels */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Moderator Controls Quick Access */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>{dir === 'rtl' ? 'أدوات الإدارة والتحكم' : 'Moderator Actions'}</span>
-            </h3>
-
-            <div className="space-y-2 text-xs">
-              <button
-                onClick={() => handleAction('APPROVE')}
-                disabled={!!actionLoading}
-                className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                {actionLoading === 'APPROVE' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                <span>{dir === 'rtl' ? 'اعتماد للمراجعة' : 'Verify & Approve'}</span>
-              </button>
-
-              <button
-                onClick={() => handleAction('MARK_READY')}
-                disabled={!!actionLoading}
-                className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-bold border border-slate-200/60 transition-colors"
-              >
-                {actionLoading === 'MARK_READY' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-                <span>{dir === 'rtl' ? 'تحديد كجاهز للنشر' : 'Mark Ready'}</span>
-              </button>
-
-              <button
-                onClick={() => handleAction('REJECT')}
-                disabled={!!actionLoading}
-                className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 rounded-2xl font-bold border border-slate-200/60 transition-colors"
-              >
-                {dir === 'rtl' ? 'رفض السجل المستورد' : 'Reject Draft'}
-              </button>
-
-              <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                <button
-                  onClick={() => handleAction('DELETE')}
-                  disabled={!!actionLoading}
-                  className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold border border-rose-100 transition-all text-center text-[11px] flex items-center justify-center gap-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{dir === 'rtl' ? 'حذف السجل نهائياً' : 'Permanent Delete'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Enrichment Tools */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <span>{dir === 'rtl' ? 'أدوات إثراء البيانات التلقائية' : 'Enrichment Intelligence'}</span>
-            </h3>
-
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Check trusted major taxonomy indexes (NCES CIP 2020 / ISCED-F 2013) to automatically fetch codes and skill vectors.
-            </p>
-
-            <button
-              onClick={handleFetchMissingFields}
-              className="w-full px-4 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-2xl font-bold border border-amber-200/60 transition-colors text-xs flex items-center justify-center gap-1.5"
-            >
-              <DownloadCloud className="w-4.5 h-4.5" />
-              <span>{dir === 'rtl' ? 'جلب النواقص من الفهرس الدولي' : 'Fetch Missing Fields'}</span>
-            </button>
-          </div>
-
-          {/* Quality Indicators */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>{dir === 'rtl' ? 'مؤشرات جودة البيانات والترخيص' : 'Taxonomy Integrity'}</span>
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
-                <span className="text-slate-500">{dir === 'rtl' ? 'حالة المطابقة الفهرسية' : 'Code Alignment'}</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  ISCED Aligned
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
-                <span className="text-slate-500">{dir === 'rtl' ? 'موثوقية السجل' : 'Data Trust'}</span>
-                <span className="font-extrabold text-blue-700">100% Certified</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Simple Activity log */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-600" />
-              <span>{dir === 'rtl' ? 'سجل العمليات الأخير' : 'Recent Ingest Logs'}</span>
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div className="relative pl-4 rtl:pl-0 rtl:pr-4 border-l rtl:border-l-0 rtl:border-r border-slate-100 pb-2 last:pb-0 space-y-0.5">
-                <div className="absolute top-1.5 left-0 rtl:left-auto rtl:right-0 -translate-x-1/2 rtl:translate-x-1/2 w-1.5 h-1.5 rounded-full bg-slate-400"></div>
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>System</span>
-                  <span>3 days ago</span>
-                </div>
-                <div className="font-bold text-slate-800">Record imported from Taxonomy batch #14</div>
-              </div>
-            </div>
-          </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-extrabold text-slate-800 hover:bg-slate-50">
+            <Pencil className="h-4 w-4" />
+            تعديل
+          </button>
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-[13px] font-extrabold text-white hover:bg-emerald-800">
+            <ShieldCheck className="h-4 w-4" />
+            اعتماد للمراجعة
+          </button>
+          <a href={`/majors/${major.id}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-extrabold text-white hover:bg-slate-800">
+            <Globe className="h-4 w-4" />
+            فتح الصفحة العامة
+          </a>
         </div>
       </div>
-
-      {/* FETCH MISSING FIELDS PREVIEW MODAL */}
-      {showFetchModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <DownloadCloud className="w-5 h-5 text-indigo-600" />
-                <span>{dir === 'rtl' ? 'جلب النواقص من الفهرس الدولي' : 'Fetch Missing Fields'}</span>
-              </h3>
-              <button onClick={() => { setShowFetchModal(false); setSuggestedFields(null); }} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl flex gap-2 leading-relaxed">
-              <ShieldCheck className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
-              <span>
-                {dir === 'rtl' ? 'سيتم فقط اقتراح الحقول المفقودة لتعبئتها. لن يتم الكتابة فوق البيانات التي تمت مراجعتها يدوياً.' : 'Only missing fields will be suggested for completion. Reviewed data will not be overwritten.'}
-              </span>
-            </div>
-
-            {fetchLoading ? (
-              <div className="py-12 flex flex-col items-center justify-center text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-3" />
-                <p className="text-sm font-bold text-slate-700">{dir === 'rtl' ? 'جاري الاستعلام في قواعد التصنيف الدولي...' : 'Querying CIP & ISCED Repositories...'}</p>
-                <p className="text-xs text-slate-500 mt-1">{dir === 'rtl' ? 'قد يستغرق هذا بضع لحظات...' : 'Extracting taxonomy specifications'}</p>
-              </div>
-            ) : suggestedFields ? (
-              <div className="space-y-3 text-xs">
-                <h4 className="font-bold text-slate-800">{dir === 'rtl' ? 'الإضافات المقترحة لملف التخصص:' : 'Suggested Additions:'}</h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 font-mono text-[11px] text-slate-800">
-                  <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="font-bold text-slate-500">CIP Code:</span>
-                    <span>{suggestedFields.cipCode}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="font-bold text-slate-500">ISCED Code:</span>
-                    <span>{suggestedFields.iscedCode}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="font-bold text-slate-500">Skills Added:</span>
-                    <span>{suggestedFields.acquiredSkills.join(', ')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-bold text-slate-500">Typical Courses:</span>
-                    <span>{suggestedFields.typicalCourses.join(', ')}</span>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                disabled={fetchLoading}
-                onClick={() => { setShowFetchModal(false); setSuggestedFields(null); }}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl font-medium text-xs hover:bg-slate-50"
-              >
-                {dir === 'rtl' ? 'إلغاء' : 'Cancel'}
-              </button>
-              {suggestedFields && (
-                <button
-                  onClick={applySuggestedFields}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all"
-                >
-                  {dir === 'rtl' ? 'اعتماد واعتراض المقترحات' : 'Apply Suggested Fields'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI DESCRIPTION MODAL */}
-      {showAiModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-600 animate-pulse" />
-                <span>{dir === 'rtl' ? 'اقتراح نبذة التخصص بالذكاء الاصطناعي' : 'AI Description Suggestion'}</span>
-              </h3>
-              <button onClick={() => { setShowAiModal(false); setAiDraft(null); }} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="p-3 bg-purple-50 border border-purple-200 text-purple-900 text-xs rounded-xl flex gap-2 leading-relaxed">
-              <ShieldCheck className="w-4.5 h-4.5 text-purple-600 shrink-0 mt-0.5" />
-              <span>
-                {dir === 'rtl' ? 'تعتبر هذه المسودة اقتراحاً أولياً للطلاب ويتطلب مراجعة أو تعديلاً قبل حفظه بشكل نهائي.' : 'This draft is generated automatically by AI. Requires admin review or direct editing before saving.'}
-              </span>
-            </div>
-
-            {aiLoading ? (
-              <div className="py-12 flex flex-col items-center justify-center text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-600 mb-3" />
-                <p className="text-sm font-bold text-slate-700">{dir === 'rtl' ? 'جاري صياغة مخرجات التخصص بلغة مبسطة...' : 'Generating student-friendly description...'}</p>
-              </div>
-            ) : aiDraft ? (
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700">{dir === 'rtl' ? 'معاينة المسودة (يمكنك تعديل النص مباشرة):' : 'Draft Preview (editable):'}</label>
-                <textarea
-                  rows={5}
-                  value={aiDraft}
-                  onChange={(e) => setAiDraft(e.target.value)}
-                  className="w-full p-3 border border-slate-200 rounded-xl text-xs text-slate-800 leading-relaxed focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                disabled={aiLoading}
-                onClick={() => { setShowAiModal(false); setAiDraft(null); }}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl font-medium text-xs hover:bg-slate-50"
-              >
-                {dir === 'rtl' ? 'إلغاء' : 'Cancel'}
-              </button>
-              {aiDraft && (
-                <button
-                  onClick={approveAiDraft}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{dir === 'rtl' ? 'اعتماد وحفظ المسودة' : 'Approve & Save Draft'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE CONFIRMATION MODAL */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">{dir === 'rtl' ? 'هل أنت متأكد من حذف التخصص؟' : 'Delete Major?'}</h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                {dir === 'rtl' ? `هل تريد حقاً حذف سجل التخصص الأكاديمي ${major.displayName}؟ لا يمكن التراجع عن هذا الإجراء.` : `Are you sure you want to delete ${major.displayName}? This action cannot be fully undone.`}
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-50"
-              >
-                {dir === 'rtl' ? 'إلغاء' : 'Cancel'}
-              </button>
-              <button
-                onClick={executeDelete}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center gap-1.5 justify-center"
-              >
-                {actionLoading === 'DELETE' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                <span>{dir === 'rtl' ? 'تأكيد الحذف' : 'Delete'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </main>
   );
 }

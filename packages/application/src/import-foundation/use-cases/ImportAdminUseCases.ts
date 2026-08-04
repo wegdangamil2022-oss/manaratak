@@ -6,6 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { IImportQueueGateway } from '../gateways/IImportQueueGateway';
 import { LEGACY_DATATYPE_MAP } from '../utils/LegacyDataTypeMap';
 import { InlineDataParser } from '../parsers/InlineDataParser';
+import {
+  MajorCatalogKind,
+  MajorCatalogMarkdownParser,
+  MajorCatalogRow,
+} from '../../majors/services/MajorCatalogMarkdownParser';
+import {
+  MajorDetailDossierMarkdownParser,
+  MajorDetailDossierRow,
+} from '../../majors/services/MajorDetailDossierMarkdownParser';
 
 export class ImportAdminUseCases {
   constructor(
@@ -164,6 +173,167 @@ export class ImportAdminUseCases {
       });
       throw err;
     }
+  }
+
+  async importMajorCatalogText(input: {
+    dataText: string;
+    sourceSystem?: string;
+    catalogKind?: MajorCatalogKind;
+    sourceFileName?: string;
+  }) {
+    const parsed = MajorCatalogMarkdownParser.parse(input.dataText, input.catalogKind);
+    const batch = await this.importRepository.createBatch({
+      sourceSystem: input.sourceSystem || input.sourceFileName || `PHASE_10_${parsed.catalogKind}_CATALOG`,
+      dataType: parsed.targetDomain,
+      batchStatus: 'PROCESSING',
+      totalRecords: parsed.rows.length,
+      processedRecords: 0,
+      failedRecords: 0,
+    });
+
+    const records = parsed.rows.map((row, index) => this.createMajorCatalogRecord(batch.id, row, index + 1, input.sourceFileName));
+
+    let stagedRecords = 0;
+    if (records.length > 0) {
+      if (typeof this.importRepository.bulkCreateRecords === 'function') {
+        const created = await this.importRepository.bulkCreateRecords(records);
+        stagedRecords = created.count;
+      } else {
+        for (const record of records) {
+          await this.importRepository.createRecord(record);
+          stagedRecords++;
+        }
+      }
+    }
+
+    const updatedBatch = await this.importRepository.updateBatchStats(batch.id, {
+      totalRecords: parsed.rows.length,
+      processedRecords: parsed.rows.length,
+      failedRecords: 0,
+      batchStatus: 'COMPLETED',
+    });
+
+    return {
+      batch: updatedBatch || {
+        ...batch,
+        totalRecords: parsed.rows.length,
+        processedRecords: parsed.rows.length,
+        failedRecords: 0,
+        batchStatus: 'COMPLETED',
+      },
+      summary: {
+        catalogKind: parsed.catalogKind,
+        totalRecords: parsed.rows.length,
+        processedRecords: parsed.rows.length,
+        failedRecords: 0,
+        stagedRecords,
+        skippedRows: parsed.skippedRows,
+        importMode: 'CATALOG_IDENTITY_ONLY',
+      },
+      records: records.slice(0, 100),
+    };
+  }
+
+  async importMajorDetailDossierText(input: {
+    dataText: string;
+    sourceSystem?: string;
+    catalogKind?: MajorCatalogKind;
+    sourceFileName?: string;
+  }) {
+    const parsed = MajorDetailDossierMarkdownParser.parse(input.dataText, input.catalogKind);
+    const batch = await this.importRepository.createBatch({
+      sourceSystem: input.sourceSystem || input.sourceFileName || `PHASE_10_${parsed.catalogKind}_DETAIL_DOSSIER`,
+      dataType: parsed.targetDomain,
+      batchStatus: 'PROCESSING',
+      totalRecords: parsed.rows.length,
+      processedRecords: 0,
+      failedRecords: 0,
+    });
+
+    const records = parsed.rows.map((row, index) => this.createMajorDetailDossierRecord(batch.id, row, index + 1, input.sourceFileName));
+
+    let stagedRecords = 0;
+    if (records.length > 0) {
+      if (typeof this.importRepository.bulkCreateRecords === 'function') {
+        const created = await this.importRepository.bulkCreateRecords(records);
+        stagedRecords = created.count;
+      } else {
+        for (const record of records) {
+          await this.importRepository.createRecord(record);
+          stagedRecords++;
+        }
+      }
+    }
+
+    const updatedBatch = await this.importRepository.updateBatchStats(batch.id, {
+      totalRecords: parsed.rows.length,
+      processedRecords: parsed.rows.length,
+      failedRecords: 0,
+      batchStatus: 'COMPLETED',
+    });
+
+    return {
+      batch: updatedBatch || {
+        ...batch,
+        totalRecords: parsed.rows.length,
+        processedRecords: parsed.rows.length,
+        failedRecords: 0,
+        batchStatus: 'COMPLETED',
+      },
+      summary: {
+        catalogKind: parsed.catalogKind,
+        totalRecords: parsed.rows.length,
+        processedRecords: parsed.rows.length,
+        failedRecords: 0,
+        stagedRecords,
+        skippedSections: parsed.skippedSections,
+        importMode: 'DETAIL_DOSSIER',
+      },
+      records: records.slice(0, 100),
+    };
+  }
+
+  private createMajorCatalogRecord(batchId: string, row: MajorCatalogRow, sourceRowNumber: number, sourceFileName?: string) {
+    const rawPayload = {
+      ...row,
+      displayName: row.canonicalMajorName,
+      sourceFileName,
+      sourceImportMode: 'CATALOG_IDENTITY_ONLY',
+      _sourceRowNumber: sourceRowNumber,
+    };
+
+    return {
+      id: `rec-${uuidv4().substring(0, 8)}`,
+      batchId,
+      status: ImportRecordStatus.NEEDS_REVIEW,
+      rawPayload,
+      validationErrors: null,
+      processingNotes: `${row.catalogKind} catalog row ${sourceRowNumber}; details dossier still required before publication.`,
+      sourceDedupKey: `${row.targetDomain}|${row.classificationCode}`.toLowerCase(),
+      chunkIndex: Math.floor((sourceRowNumber - 1) / 500),
+      sourceRowNumber,
+    };
+  }
+
+  private createMajorDetailDossierRecord(batchId: string, row: MajorDetailDossierRow, sourceRowNumber: number, sourceFileName?: string) {
+    const rawPayload = {
+      ...row,
+      displayName: row.canonicalMajorName,
+      sourceFileName,
+      _sourceRowNumber: sourceRowNumber,
+    };
+
+    return {
+      id: `rec-${uuidv4().substring(0, 8)}`,
+      batchId,
+      status: ImportRecordStatus.NEEDS_REVIEW,
+      rawPayload,
+      validationErrors: null,
+      processingNotes: `${row.catalogKind} detail dossier row ${sourceRowNumber}; content blocks require editorial review before publication.`,
+      sourceDedupKey: `${row.targetDomain}|${row.classificationCode}|detail`.toLowerCase(),
+      chunkIndex: Math.floor((sourceRowNumber - 1) / 500),
+      sourceRowNumber,
+    };
   }
 
     async listBatches(filters?: any) {

@@ -33,6 +33,8 @@ import {
   Paperclip
 } from 'lucide-react';
 import { ApiClient } from '../../api/client';
+import { phase10MajorCatalogSamples } from './phase10MajorCatalogSamples';
+import { phase10MajorSamples } from './phase10MajorSamples';
 
 export interface ProviderSource {
   id: string;
@@ -109,6 +111,61 @@ type InternationalTestSourceCard = {
   validity: string;
   changeSummary: string[];
 };
+
+type MajorCatalogKind = 'BACHELOR' | 'MASTER' | 'DOCTORATE' | 'FELLOWSHIP';
+
+interface MajorImportCard {
+  kind: MajorCatalogKind;
+  titleAr: string;
+  titleEn: string;
+  catalogFile: string;
+  detailFile: string;
+  totalRecords: number;
+  detailRecords: number;
+  detailSections: number;
+}
+
+interface MajorImportBatchPreview {
+  id: string;
+  dataType?: string;
+  sourceSystem?: string;
+  batchStatus?: string;
+  totalRecords?: number;
+  processedRecords?: number;
+  failedRecords?: number;
+  createdAt?: string;
+}
+
+interface MajorImportRecordPreview {
+  id: string;
+  status?: string;
+  promotedEntityId?: string | null;
+  processingNotes?: string | null;
+  sourceDedupKey?: string | null;
+  rawPayload?: Record<string, unknown>;
+}
+
+const MAJOR_KIND_LABELS: Record<MajorCatalogKind, { ar: string; en: string }> = {
+  BACHELOR: { ar: 'البكالوريوس', en: 'Bachelor' },
+  MASTER: { ar: 'الماجستير', en: 'Master' },
+  DOCTORATE: { ar: 'الدكتوراه', en: 'Doctorate' },
+  FELLOWSHIP: { ar: 'الزمالات', en: 'Fellowship' },
+};
+
+const MAJOR_IMPORT_CARDS: MajorImportCard[] = (['BACHELOR', 'MASTER', 'DOCTORATE', 'FELLOWSHIP'] as MajorCatalogKind[]).map((kind) => {
+  const catalogRecords = phase10MajorCatalogSamples.filter((item) => item.catalogKind === kind);
+  const detailRecords = phase10MajorSamples.filter((item) => item.catalogKind === kind);
+  return {
+    kind,
+    titleAr: `كتالوج ${MAJOR_KIND_LABELS[kind].ar}`,
+    titleEn: `${MAJOR_KIND_LABELS[kind].en} catalog`,
+    catalogFile: catalogRecords[0]?.sourceFileName ?? 'غير محدد',
+    detailFile: detailRecords[0]?.sourceFileName ?? 'غير محدد',
+    totalRecords: catalogRecords.length,
+    detailRecords: detailRecords.length,
+    detailSections: detailRecords.reduce((sum, item) => sum + item.contentSections.length, 0),
+  };
+});
 
 const SAMPLE_TEST_IMPORT_FILE = {
   name: 'CUET_2026_Sample_Update_AR.md',
@@ -842,6 +899,13 @@ export function AdminDomainImportCenterPage() {
   const [testImportText, setTestImportText] = useState<string>('');
   const [recordLimit, setRecordLimit] = useState<'10' | '50' | '100' | 'custom'>('50');
   const [customRecordLimit, setCustomRecordLimit] = useState<number>(25);
+  const [majorImportRunning, setMajorImportRunning] = useState<string | null>(null);
+  const [majorImportNotice, setMajorImportNotice] = useState<string | null>(null);
+  const [lastMajorImportBatches, setLastMajorImportBatches] = useState<Record<string, string>>({});
+  const [majorImportBatches, setMajorImportBatches] = useState<MajorImportBatchPreview[]>([]);
+  const [selectedMajorImportBatchId, setSelectedMajorImportBatchId] = useState<string>('');
+  const [majorImportRecords, setMajorImportRecords] = useState<MajorImportRecordPreview[]>([]);
+  const [majorImportReviewLoading, setMajorImportReviewLoading] = useState<boolean>(false);
   
   // Admin instructions
   const [instructions, setInstructions] = useState<Record<string, any>>({
@@ -911,6 +975,49 @@ export function AdminDomainImportCenterPage() {
   useEffect(() => {
     if (domainKey && DOMAIN_METADATA[domainKey]) {
       setProviders(DOMAIN_METADATA[domainKey].defaultProviders);
+    }
+  }, [domainKey]);
+
+  const loadMajorImportReview = async (preferredBatchId?: string) => {
+    if (domainKey !== 'majors') {
+      return;
+    }
+
+    setMajorImportReviewLoading(true);
+    try {
+      const [majorBatches, fellowshipBatches] = await Promise.all([
+        ApiClient.getImportBatches('MAJORS'),
+        ApiClient.getImportBatches('FELLOWSHIPS'),
+      ]);
+      const batches = [...majorBatches, ...fellowshipBatches]
+        .filter((batch): batch is MajorImportBatchPreview => typeof batch?.id === 'string')
+        .sort((a, b) => {
+          const first = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const second = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return second - first;
+        })
+        .slice(0, 8);
+
+      setMajorImportBatches(batches);
+      const nextBatchId = preferredBatchId || selectedMajorImportBatchId || batches[0]?.id || '';
+      setSelectedMajorImportBatchId(nextBatchId);
+
+      if (nextBatchId) {
+        const records = await ApiClient.getImportRecords({ batchId: nextBatchId, page: 1, pageSize: 8 });
+        setMajorImportRecords(Array.isArray(records.data) ? records.data as MajorImportRecordPreview[] : []);
+      } else {
+        setMajorImportRecords([]);
+      }
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : 'Failed to load import review data.');
+    } finally {
+      setMajorImportReviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (domainKey === 'majors') {
+      void loadMajorImportReview();
     }
   }, [domainKey]);
 
@@ -1055,6 +1162,57 @@ export function AdminDomainImportCenterPage() {
       setPastedPayload(sampleText);
     } catch (error) {
       console.warn('Failed to load sample test import file:', error);
+    }
+  };
+
+  const handleRunMajorWorkspaceImport = async (kind: MajorCatalogKind, mode: 'catalog' | 'details') => {
+    const label = MAJOR_KIND_LABELS[kind][isRTL ? 'ar' : 'en'];
+    const runKey = `${kind}-${mode}`;
+    setMajorImportRunning(runKey);
+    setMajorImportNotice(null);
+    try {
+      const result = mode === 'catalog'
+        ? await ApiClient.importMajorCatalogFromWorkspace(kind)
+        : await ApiClient.importMajorDetailDossierFromWorkspace(kind);
+      const count = result?.summary?.totalRecords ?? result?.batch?.totalRecords ?? 0;
+      const batchId = typeof result?.batch?.id === 'string' ? result.batch.id : undefined;
+      if (batchId) {
+        setLastMajorImportBatches((prev) => ({ ...prev, [runKey]: batchId }));
+        await loadMajorImportReview(batchId);
+      }
+      setMajorImportNotice(isRTL
+        ? `تم تجهيز ${count} سجل من ${label} في سجلات الاستيراد للمراجعة.`
+        : `${count} ${label} records were staged for review.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر تشغيل الاستيراد.' : 'Import could not be started.'));
+    } finally {
+      setMajorImportRunning(null);
+    }
+  };
+
+  const handlePromoteMajorImportBatch = async (kind: MajorCatalogKind, mode: 'catalog' | 'details') => {
+    const label = MAJOR_KIND_LABELS[kind][isRTL ? 'ar' : 'en'];
+    const runKey = `${kind}-${mode}`;
+    const batchId = lastMajorImportBatches[runKey];
+    if (!batchId) {
+      setMajorImportNotice(isRTL
+        ? 'قم بتجهيز دفعة الاستيراد أولاً قبل الترقية.'
+        : 'Stage this import batch before promotion.');
+      return;
+    }
+
+    setMajorImportRunning(`${runKey}-promote`);
+    setMajorImportNotice(null);
+    try {
+      const result = await ApiClient.promoteImportBatch(batchId);
+      await loadMajorImportReview(batchId);
+      setMajorImportNotice(isRTL
+        ? `تمت ترقية ${result?.promoted ?? 0} سجل من ${label} إلى لوحة التخصصات، وفشل ${result?.failed ?? 0} سجل للمراجعة.`
+        : `${result?.promoted ?? 0} ${label} records promoted to the majors workspace; ${result?.failed ?? 0} need review.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر ترقية دفعة الاستيراد.' : 'Import batch promotion could not be completed.'));
+    } finally {
+      setMajorImportRunning(null);
     }
   };
 
@@ -1717,6 +1875,256 @@ export function AdminDomainImportCenterPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* PHASE 10 MAJORS IMPORT CENTER */}
+      {domainKey === 'majors' && !activeWizard && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs mb-8" style={{ fontFamily: 'Cairo, sans-serif' }}>
+          <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isRTL ? 'كتالوجات المرحلة 10 وملفات التفاصيل' : 'Phase 10 catalogs and detail dossiers'}</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900">
+                {isRTL ? 'مركز استيراد التخصصات الأكاديمية' : 'Academic Majors Import Center'}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed max-w-3xl">
+                {isRTL
+                  ? 'الكتالوج يضيف التخصصات كهوية وبيانات أساسية. ملف التفاصيل يضيف الأقسام الكاملة للتخصصات التي تم تجهيزها فقط، ولا يحذف أي تخصص منشور أو موجود.'
+                  : 'Catalog import stages major identities. Detail dossiers add full content sections only for prepared records without deleting existing data.'}
+              </p>
+            </div>
+
+            <Link
+              to="/admin/majors"
+              className="px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>{isRTL ? 'فتح لوحة التخصصات' : 'Open Majors Workspace'}</span>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <span className="text-[11px] text-slate-500 font-bold">{isRTL ? 'إجمالي الكتالوج' : 'Catalog total'}</span>
+              <strong className="block text-lg text-slate-950">{phase10MajorCatalogSamples.length}</strong>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <span className="text-[11px] text-emerald-700 font-bold">{isRTL ? 'لديها تفاصيل' : 'With details'}</span>
+              <strong className="block text-lg text-emerald-900">{phase10MajorSamples.length}</strong>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <span className="text-[11px] text-blue-700 font-bold">{isRTL ? 'أقسام التفاصيل' : 'Detail sections'}</span>
+              <strong className="block text-lg text-blue-900">{phase10MajorSamples.reduce((sum, item) => sum + item.contentSections.length, 0)}</strong>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <span className="text-[11px] text-amber-700 font-bold">{isRTL ? 'تحتاج ملفات لاحقة' : 'Pending dossiers'}</span>
+              <strong className="block text-lg text-amber-900">{phase10MajorCatalogSamples.length - phase10MajorSamples.length}</strong>
+            </div>
+          </div>
+
+          {majorImportNotice && (
+            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-700">
+              {majorImportNotice}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {MAJOR_IMPORT_CARDS.map((card) => {
+              const catalogRunKey = `${card.kind}-catalog`;
+              const detailsRunKey = `${card.kind}-details`;
+              const label = MAJOR_KIND_LABELS[card.kind];
+              return (
+                <article key={card.kind} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:border-emerald-300 transition-all shadow-2xs">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 mb-1 leading-snug">
+                        {isRTL ? card.titleAr : card.titleEn}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {isRTL ? 'درجة/مسار' : 'Level'}: <span className="font-bold text-slate-800">{isRTL ? label.ar : label.en}</span>
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-[10px] font-extrabold text-slate-700">
+                      {card.kind}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                      <span className="text-[10px] text-slate-400 block">{isRTL ? 'الكتالوج' : 'Catalog'}</span>
+                      <span className="font-extrabold text-slate-800">{card.totalRecords}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[10px] text-emerald-600 block">{isRTL ? 'تفاصيل' : 'Detailed'}</span>
+                      <span className="font-extrabold text-emerald-800">{card.detailRecords}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-blue-200">
+                      <span className="text-[10px] text-blue-600 block">{isRTL ? 'أقسام' : 'Sections'}</span>
+                      <span className="font-extrabold text-blue-800">{card.detailSections}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-[11px] text-slate-600">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
+                      <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span className="truncate">{card.catalogFile}</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-white p-2.5">
+                      <Paperclip className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="truncate">{card.detailFile}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 mt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleRunMajorWorkspaceImport(card.kind, 'catalog')}
+                      disabled={majorImportRunning !== null}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      {majorImportRunning === catalogRunKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'استيراد الكتالوج' : 'Import catalog'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleRunMajorWorkspaceImport(card.kind, 'details')}
+                      disabled={majorImportRunning !== null || card.detailRecords === 0}
+                      className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-300 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      {majorImportRunning === detailsRunKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'استيراد التفاصيل' : 'Import details'}</span>
+                    </button>
+                    <button
+                      onClick={() => handlePromoteMajorImportBatch(card.kind, 'catalog')}
+                      disabled={majorImportRunning !== null || !lastMajorImportBatches[catalogRunKey]}
+                      className="px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      {majorImportRunning === `${catalogRunKey}-promote` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'ترقية الكتالوج' : 'Promote catalog'}</span>
+                    </button>
+                    <button
+                      onClick={() => handlePromoteMajorImportBatch(card.kind, 'details')}
+                      disabled={majorImportRunning !== null || !lastMajorImportBatches[detailsRunKey]}
+                      className="px-3 py-2 bg-emerald-950 hover:bg-emerald-900 disabled:bg-emerald-300 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      {majorImportRunning === `${detailsRunKey}-promote` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'ترقية التفاصيل' : 'Promote details'}</span>
+                    </button>
+                    <Link
+                      to={`/admin/majors?degree=${card.kind}`}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5"
+                    >
+                      <span>{isRTL ? 'عرض السجلات' : 'View records'}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  {isRTL ? 'مراجعة دفعات الاستيراد الأخيرة' : 'Recent import batch review'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {isRTL
+                    ? 'هنا تظهر الدفعات التي تم تجهيزها أو ترقيتها، مع حالة أول السجلات للمراجعة السريعة.'
+                    : 'Recently staged or promoted batches appear here with a quick preview of their records.'}
+                </p>
+              </div>
+              <button
+                onClick={() => loadMajorImportReview()}
+                disabled={majorImportReviewLoading}
+                className="px-3 py-2 bg-white hover:bg-slate-100 disabled:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5"
+              >
+                {majorImportReviewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>{isRTL ? 'تحديث' : 'Refresh'}</span>
+              </button>
+            </div>
+
+            {majorImportBatches.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-xs text-slate-500">
+                {isRTL ? 'لا توجد دفعات تخصصات أو زمالات مستوردة بعد.' : 'No major or fellowship import batches have been staged yet.'}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+                <div className="space-y-2">
+                  {majorImportBatches.map((batch) => {
+                    const selected = batch.id === selectedMajorImportBatchId;
+                    return (
+                      <button
+                        key={batch.id}
+                        onClick={async () => {
+                          setSelectedMajorImportBatchId(batch.id);
+                          setMajorImportReviewLoading(true);
+                          try {
+                            const records = await ApiClient.getImportRecords({ batchId: batch.id, page: 1, pageSize: 8 });
+                            setMajorImportRecords(Array.isArray(records.data) ? records.data as MajorImportRecordPreview[] : []);
+                          } finally {
+                            setMajorImportReviewLoading(false);
+                          }
+                        }}
+                        className={`w-full text-start rounded-xl border p-3 transition-all ${selected ? 'bg-white border-emerald-300 shadow-xs' : 'bg-white/70 border-slate-200 hover:border-slate-300'}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-extrabold text-slate-900">{batch.dataType || 'MAJORS'}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${batch.batchStatus === 'COMPLETED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                            {batch.batchStatus || 'PROCESSING'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1 truncate">{batch.sourceSystem || batch.id}</div>
+                        <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-slate-600">
+                          <span>{isRTL ? 'الإجمالي' : 'Total'}: {batch.totalRecords ?? 0}</span>
+                          <span>{isRTL ? 'معالج' : 'Done'}: {batch.processedRecords ?? 0}</span>
+                          <span>{isRTL ? 'فشل' : 'Failed'}: {batch.failedRecords ?? 0}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  <div className="grid grid-cols-[1fr_96px_120px] gap-2 px-3 py-2 bg-slate-100 text-[10px] font-extrabold text-slate-500">
+                    <span>{isRTL ? 'السجل' : 'Record'}</span>
+                    <span>{isRTL ? 'الحالة' : 'Status'}</span>
+                    <span>{isRTL ? 'النتيجة' : 'Result'}</span>
+                  </div>
+                  {majorImportRecords.length === 0 ? (
+                    <div className="p-5 text-center text-xs text-slate-500">
+                      {majorImportReviewLoading
+                        ? (isRTL ? 'جاري تحميل السجلات...' : 'Loading records...')
+                        : (isRTL ? 'لا توجد سجلات ظاهرة لهذه الدفعة.' : 'No visible records for this batch.')}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {majorImportRecords.map((record) => {
+                        const payload = record.rawPayload || {};
+                        const displayName = String(payload.displayName || payload.canonicalMajorName || record.sourceDedupKey || record.id);
+                        return (
+                          <div key={record.id} className="grid grid-cols-[1fr_96px_120px] gap-2 px-3 py-3 items-center text-xs">
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 truncate">{displayName}</div>
+                              <div className="text-[10px] text-slate-400 truncate">{record.processingNotes || record.id}</div>
+                            </div>
+                            <span className={`w-fit px-2 py-1 rounded-full text-[10px] font-extrabold border ${record.status === 'PROMOTED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : record.status === 'FAILED' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                              {record.status || 'NEEDS_REVIEW'}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-600 truncate">
+                              {record.promotedEntityId || (isRTL ? 'بانتظار المراجعة' : 'Pending review')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -12,7 +12,8 @@ export class MajorAdminRouter {
     const router = Router();
     const { adminMajorUseCases } = cradle;
 
-    const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
+    type RouteHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
+    const asyncHandler = (fn: RouteHandler) => (req: Request, res: Response, next: NextFunction) => {
       Promise.resolve(fn(req, res, next)).catch(next);
     };
 
@@ -22,6 +23,9 @@ export class MajorAdminRouter {
       degreeLevel: z.string().optional(),
       academicFieldOrDiscipline: z.string().optional(),
       collegeOrFaculty: z.string().optional(),
+      academicFieldId: z.string().optional(),
+      disciplineId: z.string().optional(),
+      search: z.string().optional(),
       page: z.string().optional().transform((val) => val ? parseInt(val, 10) : 1),
       pageSize: z.string().optional().transform((val) => val ? parseInt(val, 10) : 20),
     });
@@ -35,6 +39,8 @@ export class MajorAdminRouter {
       classificationCode: z.string().nullable().optional(),
       sourceUrl: z.union([z.string().url(), z.literal('')]).nullable().optional(),
       officialSourceUrl: z.union([z.string().url(), z.literal('')]).nullable().optional(),
+      academicFieldId: z.string().nullable().optional(),
+      disciplineId: z.string().nullable().optional(),
       localizedNames: z.record(z.string(), z.string()).optional(),
       aliases: z.union([z.string(), z.array(z.string())]).optional(),
       synonyms: z.union([z.string(), z.array(z.string())]).optional(),
@@ -58,6 +64,26 @@ export class MajorAdminRouter {
     router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
       const major = await adminMajorUseCases.getMajor(req.params.id);
       res.json(major);
+    }));
+
+    router.get('/:id/versions', asyncHandler(async (req: Request, res: Response) => {
+      const versions = await adminMajorUseCases.listVersions(req.params.id);
+      res.json({ data: versions });
+    }));
+
+    router.get('/:id/profiles', asyncHandler(async (req: Request, res: Response) => {
+      const profiles = await adminMajorUseCases.listLevelProfiles(req.params.id);
+      res.json({ data: profiles });
+    }));
+
+    router.get('/:id/content-sections', asyncHandler(async (req: Request, res: Response) => {
+      const sections = await adminMajorUseCases.listContentSections(req.params.id);
+      res.json({ data: sections });
+    }));
+
+    router.get('/:id/sources', asyncHandler(async (req: Request, res: Response) => {
+      const sources = await adminMajorUseCases.listSources(req.params.id);
+      res.json({ data: sources });
     }));
 
     router.patch('/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -86,6 +112,8 @@ export class MajorAdminRouter {
         classificationCode: updates.classificationCode,
         sourceUrl: updates.sourceUrl === '' ? null : updates.sourceUrl,
         officialSourceUrl: updates.officialSourceUrl === '' ? null : updates.officialSourceUrl,
+        academicFieldId: updates.academicFieldId,
+        disciplineId: updates.disciplineId,
       };
 
       if (Object.keys(optionalFields).length > 0) {
@@ -126,11 +154,11 @@ export class MajorAdminRouter {
       res.status(200).json({ success: true });
     }));
 
-    router.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation Error', details: err.issues });
       }
-      res.status(400).json({ error: err.message || 'An error occurred' });
+      res.status(400).json({ error: err instanceof Error ? err.message : 'An error occurred' });
     });
 
     return router;

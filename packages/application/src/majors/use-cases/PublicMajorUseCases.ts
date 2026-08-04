@@ -1,5 +1,6 @@
 import {
   IMajorRepository,
+  MajorDto,
   MajorStatus,
   PaginatedMajorResult,
   PublicMajorDto,
@@ -28,14 +29,14 @@ export class PublicMajorUseCases {
     return this.mapToPublicDto(major);
   }
 
-  private mapToPublicDto(major: any): PublicMajorDto {
+  private mapToPublicDto(major: MajorDto): PublicMajorDto {
     const {
-      id,
-      canonicalDedupKey,
-      sourceImportRecordId,
-      status,
-      completenessStatus,
-      createdAt,
+      id: _id,
+      canonicalDedupKey: _canonicalDedupKey,
+      sourceImportRecordId: _sourceImportRecordId,
+      status: _status,
+      completenessStatus: _completenessStatus,
+      createdAt: _createdAt,
       optionalFields,
       ...publicData
     } = major;

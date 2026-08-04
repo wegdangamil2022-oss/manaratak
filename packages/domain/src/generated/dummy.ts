@@ -41,11 +41,7 @@ export interface ILogEntryRepository { [key: string]: any }
 export class LogReferenceSpecification { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class LogValidationService { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class LogEntryDeprecatedEvent { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
-export interface MajorDto { [key: string]: any }
-export interface MajorFilters { [key: string]: any }
 export enum MajorStatus { DUMMY = 'DUMMY', IMPORTED = 'IMPORTED', ARCHIVED = 'ARCHIVED', REJECTED = 'REJECTED', PUBLISHED = 'PUBLISHED', READY_TO_PUBLISH = 'READY_TO_PUBLISH', READY_TO_REVIEW = 'READY_TO_REVIEW' }
-export interface UpdateMajorDto { [key: string]: any }
-export interface PublicMajorDto { [key: string]: any }
 export class Monitor { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class MonitorId { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class MonitorDefinition { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
@@ -210,10 +206,7 @@ export class LogEntryCreatedEvent { constructor(..._args: any[]) {} [key: string
 export class LogEntryActivatedEvent { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class LogVersionPublishedEvent { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class LogEntryArchivedEvent { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
-export interface IMajorRepository { [key: string]: any }
 export enum MajorImportCompletenessState { DUMMY = 'DUMMY', INCOMPLETE = 'INCOMPLETE', NEEDS_REVIEW = 'NEEDS_REVIEW', COMPLETE = 'COMPLETE' }
-export interface PaginatedMajorResult<T = any, _unused = T> { [key: string]: any }
-export interface PublicMajorFilters { [key: string]: any }
 export class MonitorReference { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export class MonitorOwnerReference { constructor(..._args: any[]) {} [key: string]: any; static [key: string]: any; }
 export enum MonitorLifecycleState { DUMMY = 'DUMMY', ARCHIVED = 'ARCHIVED', DEPRECATED = 'DEPRECATED', ACTIVATED = 'ACTIVATED' }
