@@ -477,6 +477,45 @@ async function seedCareers() {
 }
 
 async function seedInternationalTests() {
+  const familyProfiles = [
+    {
+      key: 'language-proficiency',
+      displayName: 'Language Proficiency Tests',
+      category: 'LANGUAGE_PROFICIENCY',
+      profileType: 'LANGUAGE_PROFICIENCY',
+      defaultSectionModel: 'LANGUAGE_SKILLS',
+      allowsCustomContentBlocks: true,
+      description: 'Tests focused on language proficiency, CEFR-style levels, bands, and skill sections.'
+    },
+    {
+      key: 'university-admission',
+      displayName: 'University Admission Tests',
+      category: 'UNDERGRAD_ADMISSION',
+      profileType: 'UNIVERSITY_ADMISSION',
+      defaultSectionModel: 'ACADEMIC_SUBJECTS',
+      allowsCustomContentBlocks: true,
+      description: 'General undergraduate and graduate admission exams with subject, aptitude, or readiness sections.'
+    },
+    {
+      key: 'specialized-admission',
+      displayName: 'Specialized Admission Tests',
+      category: 'GRAD_ADMISSION',
+      profileType: 'SPECIALIZED_ADMISSION',
+      defaultSectionModel: 'PROFESSIONAL_COMPETENCIES',
+      allowsCustomContentBlocks: true,
+      description: 'Medical, dental, clinical, and field-specific admission tests with specialized competency sections.'
+    },
+    {
+      key: 'professional-licensing',
+      displayName: 'Professional Licensing Tests',
+      category: 'PROFESSIONAL_LICENSING',
+      profileType: 'PROFESSIONAL_LICENSING',
+      defaultSectionModel: 'PROFESSIONAL_COMPETENCIES',
+      allowsCustomContentBlocks: true,
+      description: 'Licensure and certification exams with jurisdiction, renewal, practice, or eligibility rules.'
+    }
+  ];
+
   const tests = [
     ['test-ielts-academic', 'IELTS Academic', 'اختبار آيلتس الأكاديمي', 'IELTS Academic', 'British Council / IDP / Cambridge Assessment', 'LANGUAGE_PROFICIENCY'],
     ['test-toefl-ibt', 'TOEFL iBT', 'اختبار التوفل عبر الإنترنت (TOEFL iBT)', 'TOEFL iBT Test', 'Educational Testing Service (ETS)', 'LANGUAGE_PROFICIENCY'],
@@ -529,10 +568,61 @@ async function seedInternationalTests() {
     ['test-bmat', 'BMAT (BioMedical Admissions Test)', 'اختبار القبول في الطب الحيوي (BMAT)', 'BioMedical Admissions Test (BMAT)', 'CAAT', 'UNDERGRAD_ADMISSION']
   ] as const;
 
+  const keyify = (value: string) => value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'unknown-provider';
+
+  const specializedAdmissionIds = new Set([
+    'test-bmat',
+    'test-dat-us',
+    'test-gamsat-uk-au',
+    'test-imat-italy',
+    'test-mcat-aamc',
+    'test-ucat'
+  ]);
+
+  const professionalLicensingIds = new Set([
+    'test-cpa-us',
+    'test-plab',
+    'test-pmp',
+    'test-usmle'
+  ]);
+
+  const familyKeyFor = (publicId: string, testCategory: string) => {
+    if (specializedAdmissionIds.has(publicId)) return 'specialized-admission';
+    if (professionalLicensingIds.has(publicId)) return 'professional-licensing';
+    if (testCategory === 'LANGUAGE_PROFICIENCY') return 'language-proficiency';
+    return 'university-admission';
+  };
+
   await prisma.internationalTest.deleteMany({});
+  await prisma.internationalTestFamily.deleteMany({});
+  await prisma.internationalTestProvider.deleteMany({});
+  await prisma.internationalTestFamily.createMany({ data: familyProfiles });
+
+  const providerNames = Array.from(new Set(tests.map((test) => test[4])));
+  await prisma.internationalTestProvider.createMany({
+    data: providerNames.map((providerName) => ({
+      key: keyify(providerName),
+      displayName: providerName,
+      providerType: 'TEST_OWNER',
+      metadata: { phase09SeedSource: 'frontend-preview-baseline' }
+    }))
+  });
+
+  const families = await prisma.internationalTestFamily.findMany();
+  const providers = await prisma.internationalTestProvider.findMany();
+  const familyIdsByKey = new Map(families.map((family) => [family.key, family.id]));
+  const providerIdsByKey = new Map(providers.map((provider) => [provider.key, provider.id]));
+
   await prisma.internationalTest.createMany({
     data: tests.map(([publicId, displayName, localizedNameAr, localizedNameEn, providerName, testCategory]) => {
       const slug = publicId.replace(/^test-/, '');
+      const familyKey = familyKeyFor(publicId, testCategory);
+      const providerKey = keyify(providerName);
       return {
         publicId,
         slug,
@@ -544,6 +634,8 @@ async function seedInternationalTests() {
         abbreviation: displayName.split(/[ (]/)[0],
         testCategory,
         providerName,
+        familyId: familyIdsByKey.get(familyKey),
+        providerId: providerIdsByKey.get(providerKey),
         isPubliclyVisible: true,
         isSourceVerified: false,
         status: 'PUBLISHED',
@@ -551,6 +643,7 @@ async function seedInternationalTests() {
         optionalFields: {
           phase09SeedSource: 'frontend-preview-baseline',
           sourceOfTruthStatus: 'database-baseline',
+          familyProfileKey: familyKey,
           sourceMarkdownModuleCandidate: `${slug.split('-')[0]}-markdown-content.ts`
         }
       };

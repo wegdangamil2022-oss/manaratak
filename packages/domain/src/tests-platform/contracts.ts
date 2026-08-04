@@ -122,9 +122,18 @@ export interface InternationalTestFamilyDto {
   localizedNameAr?: string;
   localizedNameEn?: string;
   category: InternationalTestCategory | string;
+  profileType: InternationalTestFamilyProfileType;
+  defaultSectionModel: 'LANGUAGE_SKILLS' | 'ACADEMIC_SUBJECTS' | 'PROFESSIONAL_COMPETENCIES' | 'CUSTOM';
+  allowsCustomContentBlocks: boolean;
   description?: string;
   metadata?: Record<string, unknown>;
 }
+
+export type InternationalTestFamilyProfileType =
+  | 'LANGUAGE_PROFICIENCY'
+  | 'UNIVERSITY_ADMISSION'
+  | 'SPECIALIZED_ADMISSION'
+  | 'PROFESSIONAL_LICENSING';
 
 export interface InternationalTestProviderDto {
   id: string;

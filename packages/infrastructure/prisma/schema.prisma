@@ -249,6 +249,9 @@ model InternationalTestFamily {
   localizedNameAr   String?
   localizedNameEn   String?
   category          String
+  profileType       String
+  defaultSectionModel String
+  allowsCustomContentBlocks Boolean @default(true)
   description       String?
   metadata          Json?
   createdAt         DateTime @default(now())
