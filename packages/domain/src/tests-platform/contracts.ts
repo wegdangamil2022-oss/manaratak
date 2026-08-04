@@ -20,15 +20,30 @@ export interface InternationalTestDto {
   abbreviation?: string;
   testCategory: InternationalTestCategory;
   providerName: string;
+  familyId?: string;
+  providerId?: string;
+  currentPublishedVersionId?: string;
   status: InternationalTestStatus;
   isPubliclyVisible: boolean;
   isSourceVerified: boolean;
   completenessStatus?: InternationalTestCompletenessStatus;
   
+  family?: InternationalTestFamilyDto;
+  provider?: InternationalTestProviderDto;
+  versions?: InternationalTestVersionDto[];
   variants?: InternationalTestVariantDto[];
   scoreScale?: InternationalTestScoreScaleDto;
   sections?: InternationalTestSectionDto[];
   fees?: InternationalTestFeeMetadataDto[];
+  sessions?: InternationalTestSessionDto[];
+  centers?: InternationalTestCenterDto[];
+  requirements?: InternationalTestRequirementDto[];
+  policies?: InternationalTestPolicyDto[];
+  countryRelationships?: InternationalTestReferenceRelationshipDto[];
+  languageRelationships?: InternationalTestReferenceRelationshipDto[];
+  academicTaxonomyRelationships?: InternationalTestAcademicTaxonomyRelationshipDto[];
+  degreeRelationships?: InternationalTestReferenceRelationshipDto[];
+  equivalencyMappings?: InternationalTestEquivalencyMappingDto[];
   registrationRequirements?: string;
   identificationRequirements?: string;
   retakePolicy?: string;
@@ -60,12 +75,25 @@ export interface UpsertInternationalTestDto {
   abbreviation?: string;
   testCategory: InternationalTestCategory;
   providerName: string;
+  familyId?: string;
+  providerId?: string;
+  currentPublishedVersionId?: string;
   status?: InternationalTestStatus;
   
+  versions?: UpsertInternationalTestVersionDto[];
   variants?: UpsertInternationalTestVariantDto[];
   scoreScale?: UpsertInternationalTestScoreScaleDto;
   sections?: UpsertInternationalTestSectionDto[];
   fees?: UpsertInternationalTestFeeMetadataDto[];
+  sessions?: UpsertInternationalTestSessionDto[];
+  centers?: UpsertInternationalTestCenterDto[];
+  requirements?: UpsertInternationalTestRequirementDto[];
+  policies?: UpsertInternationalTestPolicyDto[];
+  countryRelationships?: UpsertInternationalTestReferenceRelationshipDto[];
+  languageRelationships?: UpsertInternationalTestReferenceRelationshipDto[];
+  academicTaxonomyRelationships?: UpsertInternationalTestAcademicTaxonomyRelationshipDto[];
+  degreeRelationships?: UpsertInternationalTestReferenceRelationshipDto[];
+  equivalencyMappings?: UpsertInternationalTestEquivalencyMappingDto[];
   registrationRequirements?: string;
   identificationRequirements?: string;
   retakePolicy?: string;
@@ -85,6 +113,92 @@ export interface UpsertInternationalTestDto {
   };
 
   [key: string]: unknown;
+}
+
+export interface InternationalTestFamilyDto {
+  id: string;
+  key: string;
+  displayName: string;
+  localizedNameAr?: string;
+  localizedNameEn?: string;
+  category: InternationalTestCategory | string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestProviderDto {
+  id: string;
+  key: string;
+  displayName: string;
+  localizedNameAr?: string;
+  localizedNameEn?: string;
+  providerType?: string;
+  officialWebsite?: string;
+  countryIso2Code?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestVersionDto {
+  id: string;
+  testId: string;
+  versionNumber: number;
+  status: 'DRAFT' | 'NEEDS_REVIEW' | 'APPROVED' | 'PUBLISHED' | 'SUPERSEDED' | 'ARCHIVED';
+  sourceImportRecordId?: string;
+  sourceFileName?: string;
+  sourceUri?: string;
+  sourceHash?: string;
+  importedAt?: Date;
+  publishedAt?: Date;
+  approvedBy?: string;
+  supersededAt?: Date;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
+  changeSummary?: Record<string, unknown>;
+  rawContentBlocks?: Record<string, unknown>[];
+  deliveryModes?: InternationalTestDeliveryModeProfileDto[];
+  scoreScales?: InternationalTestVersionScoreScaleDto[];
+  contentBlocks?: InternationalTestContentBlockDto[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestVersionDto {
+  versionNumber: number;
+  status: InternationalTestVersionDto['status'];
+  sourceImportRecordId?: string;
+  sourceFileName?: string;
+  sourceUri?: string;
+  sourceHash?: string;
+  importedAt?: Date;
+  publishedAt?: Date;
+  approvedBy?: string;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
+  changeSummary?: Record<string, unknown>;
+  rawContentBlocks?: Record<string, unknown>[];
+  deliveryModes?: UpsertInternationalTestDeliveryModeProfileDto[];
+  scoreScales?: UpsertInternationalTestVersionScoreScaleDto[];
+  contentBlocks?: UpsertInternationalTestContentBlockDto[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestDeliveryModeProfileDto {
+  id: string;
+  versionId: string;
+  mode: InternationalTestDeliveryMode | string;
+  displayName: string;
+  isActive: boolean;
+  registrationUrl?: string;
+  administrationNotes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestDeliveryModeProfileDto {
+  mode: InternationalTestDeliveryMode | string;
+  displayName: string;
+  isActive?: boolean;
+  registrationUrl?: string;
+  administrationNotes?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface InternationalTestVariantDto {
@@ -229,6 +343,226 @@ export interface InternationalTestEvidenceDto {
   sourceTrustLevel?: InternationalTestSourceTrustLevel;
 }
 
+export interface InternationalTestVersionScoreScaleDto {
+  id: string;
+  versionId: string;
+  scaleName: string;
+  overallMinimum?: number;
+  overallMaximum?: number;
+  scoreIncrement?: number;
+  bandsOrLevels?: string[];
+  passFailRules?: string;
+  cefrEquivalency?: string;
+  crossTestEquivalency?: string;
+  resultValidityDurationMonths?: number;
+  resultDeliveryTimeDays?: number;
+  scoreReportingUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestVersionScoreScaleDto {
+  scaleName: string;
+  overallMinimum?: number;
+  overallMaximum?: number;
+  scoreIncrement?: number;
+  bandsOrLevels?: string[];
+  passFailRules?: string;
+  cefrEquivalency?: string;
+  crossTestEquivalency?: string;
+  resultValidityDurationMonths?: number;
+  resultDeliveryTimeDays?: number;
+  scoreReportingUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestSessionDto {
+  id: string;
+  testId: string;
+  versionId?: string;
+  deliveryModeId?: string;
+  sessionCode?: string;
+  title: string;
+  registrationOpensAt?: Date;
+  registrationClosesAt?: Date;
+  startsAt?: Date;
+  endsAt?: Date;
+  timezone?: string;
+  capacity?: number;
+  status: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestSessionDto {
+  versionId?: string;
+  deliveryModeId?: string;
+  sessionCode?: string;
+  title: string;
+  registrationOpensAt?: Date;
+  registrationClosesAt?: Date;
+  startsAt?: Date;
+  endsAt?: Date;
+  timezone?: string;
+  capacity?: number;
+  status: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestCenterDto {
+  id: string;
+  testId: string;
+  deliveryModeId?: string;
+  centerCode?: string;
+  displayName: string;
+  countryIso2Code?: string;
+  cityName?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  officialUrl?: string;
+  status: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestCenterDto {
+  deliveryModeId?: string;
+  centerCode?: string;
+  displayName: string;
+  countryIso2Code?: string;
+  cityName?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  officialUrl?: string;
+  status: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestRequirementDto {
+  id: string;
+  testId: string;
+  versionId?: string;
+  requirementType: string;
+  title: string;
+  description?: string;
+  appliesTo?: Record<string, unknown>;
+  isMandatory: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestRequirementDto {
+  versionId?: string;
+  requirementType: string;
+  title: string;
+  description?: string;
+  appliesTo?: Record<string, unknown>;
+  isMandatory?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestPolicyDto {
+  id: string;
+  testId: string;
+  versionId?: string;
+  policyType: string;
+  title: string;
+  description?: string;
+  sourceUrl?: string;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestPolicyDto {
+  versionId?: string;
+  policyType: string;
+  title: string;
+  description?: string;
+  sourceUrl?: string;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestReferenceRelationshipDto {
+  id: string;
+  testId: string;
+  referenceCode: string;
+  relationshipType: string;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestReferenceRelationshipDto {
+  referenceCode: string;
+  relationshipType: string;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestAcademicTaxonomyRelationshipDto {
+  id: string;
+  testId: string;
+  taxonomyNodeId: string;
+  relationshipType: string;
+  confidence?: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestAcademicTaxonomyRelationshipDto {
+  taxonomyNodeId: string;
+  relationshipType: string;
+  confidence?: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestEquivalencyMappingDto {
+  id: string;
+  testId: string;
+  sourceScale: string;
+  sourceValue: string;
+  targetScale: string;
+  targetValue: string;
+  confidence?: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestEquivalencyMappingDto {
+  sourceScale: string;
+  sourceValue: string;
+  targetScale: string;
+  targetValue: string;
+  confidence?: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestContentBlockDto {
+  id: string;
+  versionId: string;
+  blockKey: string;
+  blockType: string;
+  title?: string;
+  locale?: string;
+  content: string;
+  sourceSectionPath?: string;
+  reviewStatus: 'NEEDS_REVIEW' | 'MAPPED' | 'IGNORED' | 'APPROVED';
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertInternationalTestContentBlockDto {
+  blockKey: string;
+  blockType: string;
+  title?: string;
+  locale?: string;
+  content: string;
+  sourceSectionPath?: string;
+  reviewStatus?: InternationalTestContentBlockDto['reviewStatus'];
+  metadata?: Record<string, unknown>;
+}
+
 
 export interface InternationalTestFilters {
   searchQuery?: string;
@@ -249,4 +583,3 @@ export interface PaginatedInternationalTestResult<T> {
   page: number;
   limit: number;
 }
-

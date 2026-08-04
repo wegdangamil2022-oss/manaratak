@@ -551,7 +551,7 @@ async function seedInternationalTests() {
         optionalFields: {
           phase09SeedSource: 'frontend-preview-baseline',
           sourceOfTruthStatus: 'database-baseline',
-          sourceMarkdownModule: `${slug.split('-')[0]}-markdown-content.ts`
+          sourceMarkdownModuleCandidate: `${slug.split('-')[0]}-markdown-content.ts`
         }
       };
     })
