@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from '../../i18n/I18nProvider';
-import { IELTS_MARKDOWN_CONTENT } from './ielts-markdown-content';
-import { TOEFL_MARKDOWN_CONTENT } from './toefl-markdown-content';
-import { DUOLINGO_MARKDOWN_CONTENT } from './duolingo-markdown-content';
-import { ALEVEL_MARKDOWN_CONTENT } from './alevel-markdown-content';
-import { ABITUR_MARKDOWN_CONTENT } from './abitur-markdown-content';
-import { ACT_MARKDOWN_CONTENT } from './act-markdown-content';
-import { CELPEBRAS_MARKDOWN_CONTENT } from './celpebras-markdown-content';
-import { CILS_MARKDOWN_CONTENT } from './cils-markdown-content';
-import { AP_MARKDOWN_CONTENT } from './ap-markdown-content';
-import { CAMBRIDGE_MARKDOWN_CONTENT } from './cambridge-markdown-content';
 import { 
   ArrowLeft, 
   Server, 
@@ -99,6 +89,107 @@ export interface ScholarshipImportBatch {
   status: 'success' | 'partial_success' | 'needs_review';
   records: ScholarshipRecordAudit[];
 }
+
+type TestSourceCheckStatus = 'current' | 'checking' | 'update_available' | 'needs_review';
+
+type InternationalTestSourceCard = {
+  id: string;
+  testId: string;
+  title: string;
+  providerName: string;
+  family: string;
+  fileName: string;
+  fileSize: string;
+  sourceUrl: string;
+  version: number;
+  importedAt: string;
+  status: 'PUBLISHED' | 'DRAFT' | 'NEEDS_REVIEW';
+  checkStatus: TestSourceCheckStatus;
+  scoreRange: string;
+  validity: string;
+  changeSummary: string[];
+};
+
+const INTERNATIONAL_TEST_SOURCE_CARDS: InternationalTestSourceCard[] = ([
+  ['test-ielts-academic', 'IELTS Academic', 'British Council / IDP / Cambridge', 'اختبار لغة', 'IELTS_2026_Complete_Data_AR_Final.md', '55.7 KB', 'https://ielts.org/take-a-test/test-types/ielts-academic', '0.0 - 9.0', 'سنتان'],
+  ['test-toefl-ibt', 'TOEFL iBT', 'Educational Testing Service (ETS)', 'اختبار لغة', 'TOEFL_iBT_2026_Complete_Data_AR.md', '48.2 KB', 'https://www.ets.org/toefl', '0 - 120', 'سنتان'],
+  ['test-duolingo-det', 'Duolingo English Test', 'Duolingo, Inc.', 'اختبار لغة', 'Duolingo_English_Test_2026_Complete_Data_AR.md', '42.5 KB', 'https://englishtest.duolingo.com', '10 - 160', 'سنتان'],
+  ['test-alevel-uk', 'A-Level (UK & International)', 'Cambridge / Pearson Edexcel / OxfordAQA', 'قبول جامعي', 'A_Level_UK_International_2026_Data_AR.md', '68.4 KB', 'https://www.cambridgeinternational.org', 'A* - E', 'دائم'],
+  ['test-abitur-de', 'Abitur (German Qualification)', 'KMK / IQB', 'قبول جامعي', 'German_Abitur_2026_Data_AR.md', '72.1 KB', 'https://www.kmk.org', '300 - 900 Punkte', 'دائم'],
+  ['test-act-us', 'ACT (Enhanced ACT)', 'ACT Education Corp.', 'قبول جامعي', 'Enhanced_ACT_2026_Data_AR.md', '65.8 KB', 'https://www.act.org', '1 - 36', '5 سنوات'],
+  ['test-celpebras-br', 'Celpe-Bras', 'Inep / Ministerio da Educacao', 'اختبار لغة', 'Celpe_Bras_Portuguese_2026_Data_AR.md', '58.9 KB', 'https://www.gov.br/inep', 'Intermediario - Avancado', 'حسب الجهة'],
+  ['test-cils-it', 'CILS', 'Universita per Stranieri di Siena', 'اختبار لغة', 'CILS_Italian_2026_Data_AR.md', '78.3 KB', 'https://cils.unistrasi.it', 'A1 - C2', 'دائم'],
+  ['test-ap-us', 'AP Exams', 'College Board', 'قبول جامعي', 'AP_Exams_College_Board_2026_Data_AR.md', '82.4 KB', 'https://apstudents.collegeboard.org', '1 - 5', 'دائم'],
+  ['test-cambridge-uk', 'Cambridge English Qualifications', 'Cambridge University Press & Assessment', 'اختبار لغة', 'Cambridge_English_Qualifications_2026_Data_AR.md', '71.5 KB', 'https://www.cambridgeenglish.org', '100 - 230', 'دائم'],
+  ['test-clt-us', 'CLT (Classic Learning Test)', 'Classic Learning Initiatives', 'قبول جامعي', 'CLT_Classic_Learning_Test_2026_2027_Complete_Data_AR.md', '52.0 KB', 'https://www.cltexam.com', '0 - 120', 'حسب الجامعة'],
+  ['test-cpa-us', 'U.S. CPA', 'AICPA / NASBA / State Boards', 'ترخيص مهني', 'CPA_United_States_Accounting_Licensure_2026.md', '74.0 KB', 'https://nasba.org/exams/cpaexam', '0 - 99', '30 شهرًا لرصيد القسم'],
+  ['test-csca-cn', 'CSCA', 'China Scholarship Council', 'قبول جامعي', 'CSCA_China_2026_Complete_Data_AR.md', '53.6 KB', 'https://www.csca.cn', '0 - 100', 'دورة قبول'],
+  ['test-cuet-in', 'CUET', 'National Testing Agency (NTA)', 'قبول جامعي', 'CUET_India_2026_Complete_Data_AR.md', '61.0 KB', 'https://cuet.nta.nic.in', '0 - 250', 'سنة أكاديمية'],
+  ['test-csat-kr', 'CSAT / Suneung', 'KICE', 'قبول جامعي', 'CSAT_South_Korea_2027_Complete_Data_AR.md', '59.5 KB', 'https://www.kice.re.kr', 'درجات معيارية', 'سنة قبول'],
+  ['test-dele-es', 'DELE', 'Instituto Cervantes', 'اختبار لغة', 'DELE_Spanish_2026_Complete_Data_AR.md', '50.1 KB', 'https://examenes.cervantes.es', 'A1 - C2', 'دائم'],
+  ['test-delf-dalf-fr', 'DELF / DALF', 'France Education international', 'اختبار لغة', 'DELF_DALF_France_Belgium_2026_Complete_Data_AR.md', '56.3 KB', 'https://www.france-education-international.fr', 'A1 - C2', 'دائم'],
+  ['test-dat-us', 'DAT', 'American Dental Association', 'قبول تخصصي', 'DAT_United_States_Dental_Admission_2026.md', '47.4 KB', 'https://www.ada.org', '1 - 30', 'حسب الكلية'],
+  ['test-gamsat-uk-au', 'GAMSAT', 'ACER', 'قبول تخصصي', 'GAMSAT_2026_Complete_Data_AR.md', '54.2 KB', 'https://gamsat.acer.org', '0 - 100', '2-4 سنوات'],
+  ['test-gmat-focus', 'GMAT Exam Focus', 'GMAC', 'قبول جامعي', 'gmat-markdown-content.ts', '52.8 KB', 'https://www.mba.com', '205 - 805', '5 سنوات'],
+  ['test-gre-shorter', 'GRE General Test', 'Educational Testing Service (ETS)', 'قبول جامعي', 'gre-markdown-content.ts', '49.7 KB', 'https://www.ets.org/gre', '260 - 340', '5 سنوات'],
+  ['test-hsk-chinese', 'HSK', 'CLEC', 'اختبار لغة', 'HSK_Chinese_2026_Complete_Data_AR.md', '46.8 KB', 'https://www.chinesetest.cn', 'HSK 1 - 9', 'سنتان للقبول'],
+  ['test-eju-japanese', 'EJU', 'JASSO', 'قبول جامعي', 'EJU_Japan_2026_Complete_Data_AR.md', '49.9 KB', 'https://www.jasso.go.jp', '0 - 400', 'سنتان'],
+  ['test-itep-academic', 'iTEP Academic', 'Boston Educational Services', 'اختبار لغة', 'itep-markdown-content.ts', '44.3 KB', 'https://www.itepexam.com', '0.0 - 6.0', 'سنتان'],
+  ['test-jlpt-exam', 'JLPT', 'Japan Foundation & JEES', 'اختبار لغة', 'jlpt-markdown-content.ts', '45.1 KB', 'https://www.jlpt.jp', 'N5 - N1', 'دائم'],
+  ['test-languagecert-academic', 'LANGUAGECERT Academic', 'PeopleCert', 'اختبار لغة', 'languagecert-markdown-content.ts', '43.7 KB', 'https://www.languagecert.org', 'A1 - C2', 'حسب الجهة'],
+  ['test-linguaskill-cambridge', 'Linguaskill', 'Cambridge English', 'اختبار لغة', 'linguaskill-markdown-content.ts', '42.0 KB', 'https://www.cambridgeenglish.org', 'CEFR', 'حسب الجهة'],
+  ['test-imat-italy', 'IMAT', 'MUR Italy', 'قبول تخصصي', 'imat-markdown-content.ts', '46.5 KB', 'https://www.universitaly.it', '0 - 90', 'سنة قبول'],
+  ['test-met-michigan', 'Michigan English Test', 'Michigan Language Assessment', 'اختبار لغة', 'met-markdown-content.ts', '41.8 KB', 'https://michiganassessment.org', '0 - 80', 'سنتان'],
+  ['test-staatsexamen-nt2', 'Staatsexamen Nt2', 'CvTE & DUO', 'اختبار لغة', 'nt2-markdown-content.ts', '40.6 KB', 'https://www.staatsexamensnt2.nl', 'Programma I/II', 'دائم غالبًا'],
+  ['test-oxford-ote', 'Oxford Test of English', 'Oxford University Press', 'اختبار لغة', 'ote-markdown-content.ts', '42.8 KB', 'https://www.oxfordtestofenglish.com', 'CEFR', 'سنتان'],
+  ['test-matura-europe', 'Matura', 'National Ministries of Education', 'قبول جامعي', 'matura-markdown-content.ts', '58.4 KB', 'https://eurydice.eacea.ec.europa.eu', 'حسب الدولة', 'دائم'],
+  ['test-mcat-aamc', 'MCAT', 'AAMC', 'قبول تخصصي', 'mcat.md', '62.2 KB', 'https://students-residents.aamc.org/mcat', '472 - 528', '2-3 سنوات'],
+  ['test-plab', 'PLAB', 'GMC', 'ترخيص مهني', 'plab.md', '57.9 KB', 'https://www.gmc-uk.org', 'Pass / Fail', 'حسب GMC'],
+  ['test-pmp', 'PMP', 'PMI', 'ترخيص مهني', 'pmp.md', '55.8 KB', 'https://www.pmi.org', 'Above Target', '3 سنوات'],
+  ['test-polish-state', 'Polish State Certificate', 'State Commission Poland', 'اختبار لغة', 'polish_state_certificate.md', '43.0 KB', 'https://certyfikatpolski.pl', 'A1 - C2', 'دائم'],
+  ['test-pte', 'PTE Academic', 'Pearson', 'اختبار لغة', 'pte-markdown-content.ts', '46.0 KB', 'https://www.pearsonpte.com', '10 - 90', 'سنتان'],
+  ['test-sat', 'SAT', 'College Board', 'قبول جامعي', 'SAT_2026_Complete_Data_AR_Final.md', '55.1 KB', 'https://satsuite.collegeboard.org', '400 - 1600', '5 سنوات'],
+  ['test-testdaf', 'TestDaF', 'g.a.s.t.', 'اختبار لغة', 'TestDaF_German_2026_Complete_Data_AR.md', '51.3 KB', 'https://www.testdaf.de', 'TDN 3 - 5', 'دائم'],
+  ['test-tomer', 'TOMER', 'Ankara University', 'اختبار لغة', 'tomer.md', '42.9 KB', 'https://tomer.ankara.edu.tr', 'A1 - C1', 'حسب الجهة'],
+  ['test-topik', 'TOPIK', 'NIIED', 'اختبار لغة', 'topik.md', '48.0 KB', 'https://www.topik.go.kr', 'Level 1 - 6', 'سنتان'],
+  ['test-toeic', 'TOEIC', 'ETS', 'اختبار لغة', 'toeic-markdown-content.ts', '45.0 KB', 'https://www.ets.org/toeic', '10 - 990', 'سنتان'],
+  ['test-ukbi', 'UKBI', 'Kemendikdasmen', 'اختبار لغة', 'ukbi.md', '39.7 KB', 'https://ukbi.kemdikbud.go.id', '251 - 800', 'سنتان'],
+  ['test-usmle', 'USMLE', 'FSMB & NBME', 'ترخيص مهني', 'usmle.md', '66.3 KB', 'https://www.usmle.org', 'Pass/Numeric', 'حسب الولاية'],
+  ['test-yks', 'YKS', 'OSYM', 'قبول جامعي', 'yks.md', '52.4 KB', 'https://www.osym.gov.tr', 'حسب المسار', 'سنة واحدة'],
+  ['test-torfl', 'TORFL / TRKI', 'Russian Ministry of Education', 'اختبار لغة', 'torfl.md', '44.4 KB', 'https://testingcenter.spbu.ru', 'A1 - C2', 'دائم'],
+  ['test-ucat', 'UCAT', 'UCAT Consortium', 'قبول تخصصي', 'ucat.md', '50.9 KB', 'https://www.ucat.ac.uk', '1200 - 3600', 'سنة واحدة'],
+  ['test-yos', 'YOS / TR-YOS', 'OSYM', 'قبول جامعي', 'yos.md', '48.8 KB', 'https://www.osym.gov.tr', '0 - 500', 'سنتان'],
+  ['test-bmat', 'BMAT', 'CAAT', 'قبول تخصصي', 'bmat.md', '41.9 KB', 'https://www.admissionstesting.org', '1.0 - 9.0', 'سنة واحدة']
+] as Array<[string, string, string, string, string, string, string, string, string]>).map(([testId, title, providerName, family, fileName, fileSize, sourceUrl, scoreRange, validity], index) => ({
+  id: `source-card-${testId}`,
+  testId,
+  title,
+  providerName,
+  family,
+  fileName,
+  fileSize,
+  sourceUrl,
+  scoreRange,
+  validity,
+  version: 1,
+  importedAt: '2026-08-02',
+  status: testId === 'test-cuet-in' ? 'NEEDS_REVIEW' : 'PUBLISHED',
+  checkStatus: testId === 'test-cuet-in' ? 'update_available' : 'current',
+  changeSummary: testId === 'test-cuet-in'
+    ? ['تحديث تجريبي: نافذة تسجيل جديدة تحتاج مراجعة', 'تحديث تجريبي: رابط إشعار NTA يحتاج تحقق']
+    : index % 7 === 0
+      ? ['لا توجد تغييرات منشورة، آخر نسخة مطابقة للمصدر']
+      : []
+})) satisfies InternationalTestSourceCard[];
+
+const isInternationalTestSourceCard = (value: unknown): value is InternationalTestSourceCard => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const card = value as Partial<InternationalTestSourceCard>;
+  return Boolean(card.testId && card.title && card.sourceUrl && card.checkStatus);
+};
 
 const SCHOLARSHIP_IMPORT_BATCHES: ScholarshipImportBatch[] = [
   {
@@ -769,256 +860,40 @@ export function AdminDomainImportCenterPage() {
   });
 
   // International Test Import Cards State
-  const [testImportCards, setTestImportCards] = useState<Array<any>>(() => {
+  const [testImportCards, setTestImportCards] = useState<InternationalTestSourceCard[]>(() => {
     try {
       const saved = localStorage.getItem('manaratak_test_import_cards');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const uniqueCardsMap = new Map<string, any>();
-          for (const card of parsed) {
-            const testId = card.testId || card.id || '';
-            const titleLower = ((card.title || '') + ' ' + (card.titleAr || '') + ' ' + testId).toLowerCase();
-            let key = testId;
-            if (titleLower.includes('toefl') || titleLower.includes('توفل')) key = 'test-toefl-ibt';
-            if (titleLower.includes('ielts') || titleLower.includes('آيلتس')) key = 'test-ielts-academic';
-            if (titleLower.includes('duolingo') || titleLower.includes('دولينجو') || titleLower.includes('det')) key = 'test-duolingo-det';
-            if (titleLower.includes('alevel') || titleLower.includes('a-level') || titleLower.includes('المستوى المتقدم')) key = 'test-alevel-uk';
-            if (titleLower.includes('abitur') || titleLower.includes('ألمانية') || titleLower.includes('allgemeine hochschulreife')) key = 'test-abitur-de';
-            if (titleLower.includes('act') || titleLower.includes('american college testing')) key = 'test-act-us';
-            if (titleLower.includes('celpe') || titleLower.includes('برتغالية') || titleLower.includes('portuguese')) key = 'test-celpebras-br';
-            if (titleLower.includes('cils') || titleLower.includes('إيطالية') || titleLower.includes('italian')) key = 'test-cils-it';
-            if (titleLower.includes('ap') || titleLower.includes('advanced placement') || titleLower.includes('متقدم')) key = 'test-ap-us';
-            if (titleLower.includes('cambridge') || titleLower.includes('كامبريدج') || titleLower.includes('c1 advanced')) key = 'test-cambridge-uk';
+      if (!saved) {
+        return INTERNATIONAL_TEST_SOURCE_CARDS;
+      }
 
-            if (!uniqueCardsMap.has(key)) {
-              uniqueCardsMap.set(key, { ...card, testId: key });
-            }
-          }
-          const filtered = Array.from(uniqueCardsMap.values());
-          if (filtered.length > 0) {
-            return filtered.map((card: any) => {
-              const baseCard = {
-                ...card,
-                notes: (!card.notes || card.notes.length > 120 || card.notes.includes('#') || card.notes.includes('**'))
-                  ? 'تم استيراد ومعالجة ملف البيانات الشامل واستخراج الأقسام وسلالم الدرجات بنجاح والترحيل التلقائي لصفحة تفاصيل الاختبار.'
-                  : card.notes
-              };
-              if (card.testId === 'test-ielts-academic' && !card.markdownContent) {
-                baseCard.markdownContent = IELTS_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-toefl-ibt' && !card.markdownContent) {
-                baseCard.markdownContent = TOEFL_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-duolingo-det' && !card.markdownContent) {
-                baseCard.markdownContent = DUOLINGO_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-alevel-uk' && !card.markdownContent) {
-                baseCard.markdownContent = ALEVEL_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-abitur-de' && !card.markdownContent) {
-                baseCard.markdownContent = ABITUR_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-act-us' && !card.markdownContent) {
-                baseCard.markdownContent = ACT_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-celpebras-br' && !card.markdownContent) {
-                baseCard.markdownContent = CELPEBRAS_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-cils-it' && !card.markdownContent) {
-                baseCard.markdownContent = CILS_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-ap-us' && !card.markdownContent) {
-                baseCard.markdownContent = AP_MARKDOWN_CONTENT;
-              }
-              if (card.testId === 'test-cambridge-uk' && !card.markdownContent) {
-                baseCard.markdownContent = CAMBRIDGE_MARKDOWN_CONTENT;
-              }
-              return baseCard;
-            });
-          }
-        }
+      const parsed: unknown = JSON.parse(saved);
+      if (!Array.isArray(parsed)) {
+        return INTERNATIONAL_TEST_SOURCE_CARDS;
       }
-    } catch (e) {}
-    return [
-      {
-        id: 'card-ielts-master-2026',
-        testId: 'test-ielts-academic',
-        title: 'IELTS Academic — اختبار الآيلتس الأكاديمي الدولي',
-        titleAr: 'اختبار الآيلتس (IELTS) — ملف البيانات المعتمد الشامل 2026',
-        fileName: 'TS_2026_Complete_Data_AR_Final.md',
-        fileSize: '55.7 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'British Council / IDP / Cambridge',
-        scoreRange: '0.0 – 9.0 Band Scale',
-        validity: 'سنتان (24 شهراً)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 14:10',
-        sectionsList: ['الاستماع (Listening)', 'القراءة (Reading)', 'الكتابة (Writing)', 'المحادثة (Speaking)'],
-        notes: 'تمت معالجة ملف البيانات الشامل واستخراج الأقسام وسلالم الدرجات ومراكز الاختبار بنجاح والترحيل التلقائي لإدارة الاختبارات.',
-        markdownContent: IELTS_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-toefl-master-2026',
-        testId: 'test-toefl-ibt',
-        title: 'TOEFL iBT — اختبار التوفل عبر الإنترنت الدولي 2026',
-        titleAr: 'اختبار التوفل (TOEFL iBT) — ملف بيانات الاختبار الكامل 2026',
-        fileName: 'TOEFL_iBT_2026_Complete_Data_AR.md',
-        fileSize: '48.2 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Educational Testing Service (ETS)',
-        scoreRange: '1.0 – 6.0 Band Scale (0 – 120 Score)',
-        validity: 'سنتان (24 شهراً)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 15:30',
-        sectionsList: ['القراءة (Reading)', 'الاستماع (Listening)', 'الكتابة (Writing)', 'المحادثة (Speaking)'],
-        notes: 'تمت معالجة ملف بيانات التوفل المحدّث لعام 2026 واستخراج الأقسام وسلالم الدرجات والربط مع ETS بنجاح.',
-        markdownContent: TOEFL_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-duolingo-master-2026',
-        testId: 'test-duolingo-det',
-        title: 'Duolingo English Test — اختبار دولينجو للغة الإنجليزية 2026',
-        titleAr: 'اختبار دولينجو (DET) — ملف البيانات الكامل للطلاب 2026',
-        fileName: 'Duolingo_English_Test_2026_Data_AR.md',
-        fileSize: '42.5 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Duolingo, Inc.',
-        scoreRange: '10 – 160 Score Scale',
-        validity: 'سنتان (24 شهراً)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 15:40',
-        sectionsList: ['القراءة (Reading)', 'الاستماع (Listening)', 'الكتابة (Writing)', 'المحادثة (Speaking)'],
-        notes: 'تمت معالجة ملف بيانات اختبار دولينجو التكيّفي الكامل واستخراج الأقسام وسلالم الدرجات والروابط الرسمية بنجاح.',
-        markdownContent: DUOLINGO_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-alevel-master-2026',
-        testId: 'test-alevel-uk',
-        title: 'A-Level / UK & International — مؤهلات المستوى المتقدم البريطاني والدولي 2026',
-        titleAr: 'المستوى المتقدم البريطاني والدولي (A-Level) — ملف البيانات المعتمد الشامل 2026',
-        fileName: 'A_Level_UK_International_2026_Data_AR.md',
-        fileSize: '68.4 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Cambridge / Pearson Edexcel / OxfordAQA',
-        scoreRange: 'A* – E (Pass), U (Unclassified)',
-        validity: 'دائم (Permanent Qualification)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 15:50',
-        sectionsList: ['AS Level (السنة الأولى)', 'A2 Level (السنة الثانية)', 'Coursework & Practical Endorsement'],
-        notes: 'تمت معالجة ملف بيانات عائلة مؤهلات A-Level الشاملة واستخراج التخصصات والمجالس والاعتراف الجامعي بنجاح.',
-        markdownContent: ALEVEL_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-abitur-master-2026',
-        testId: 'test-abitur-de',
-        title: 'Abitur / Germany — الثانوية العامة الألمانية المؤهلة للجامعة 2026',
-        titleAr: 'الثانوية العامة الألمانية (Abitur) — ملف البيانات المعتمد الشامل 2026',
-        fileName: 'German_Abitur_2026_Data_AR.md',
-        fileSize: '72.1 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'وزارات التعليم الألمانية (KMK / IQB)',
-        scoreRange: '300 – 900 Punkte (المعدل 1.0 – 4.0)',
-        validity: 'دائم (Permanent Qualification)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:00',
-        sectionsList: ['Qualifikationsphase (Block I)', 'Abiturprüfung (Block II)', 'الامتحانات الشفهية والكتابية'],
-        notes: 'تمت معالجة ملف بيانات Abitur الشامل واستخراج نظام النقاط وحساب المعدل والاعتراف الأوروبي بنجاح.',
-        markdownContent: ABITUR_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-act-master-2026',
-        testId: 'test-act-us',
-        title: 'ACT / USA & International — اختبار القبول الجامعي الأمريكي 2026',
-        titleAr: 'اختبار القبول الجامعي الأمريكي (Enhanced ACT) — ملف البيانات المعتمد الشامل 2026',
-        fileName: 'Enhanced_ACT_2026_Data_AR.md',
-        fileSize: '65.8 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'ACT Education Corp.',
-        scoreRange: '1 – 36 Composite Score Scale',
-        validity: '5 سنوات (معتمد للقبول والمنح)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:05',
-        sectionsList: ['English (35 دقيقة)', 'Math (50 دقيقة)', 'Reading (40 دقيقة)', 'Science (اختياري)', 'Writing (اختياري)'],
-        notes: 'تمت معالجة ملف بيانات Enhanced ACT الشامل وتحديث بنية الدرجة المركبة وصيغ الاختيار بجميع التفاصيل بنجاح.',
-        markdownContent: ACT_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-celpebras-master-2026',
-        testId: 'test-celpebras-br',
-        title: 'Celpe-Bras / Brazil — الشهادة البرازيلية الرسمية للكفاءة في البرتغالية 2026',
-        titleAr: 'اختبار الكفاءة في اللغة البرتغالية للطلاب والأجانب (Celpe-Bras) — ملف البيانات الكامل 2026',
-        fileName: 'Celpe_Bras_Portuguese_2026_Data_AR.md',
-        fileSize: '58.9 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Inep / Ministério da Educação (البرازيل)',
-        scoreRange: 'Intermediário – Avançado Superior (4 مستويات)',
-        validity: 'محدد حسب الجهة والمؤسسة',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:10',
-        sectionsList: ['Parte Escrita (الجزء الكتابي - 3 ساعات)', 'Parte Oral (المقابلة الشفهية - 20 دقيقة)'],
-        notes: 'تمت معالجة ملف بيانات Celpe-Bras الرسمي واستخراج بنية المهمات التكاملية ومستويات التقييم الأربعة بنجاح.',
-        markdownContent: CELPEBRAS_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-cils-master-2026',
-        testId: 'test-cils-it',
-        title: 'CILS / Italy — شهادة الكفاءة في اللغة الإيطالية (Università per Stranieri di Siena) 2026',
-        titleAr: 'شهادة الكفاءة في اللغة الإيطالية (CILS) — ملف البيانات المعتمد الشامل 2026',
-        fileName: 'CILS_Italian_2026_Data_AR.md',
-        fileSize: '78.3 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Università per Stranieri di Siena (Centro CILS)',
-        scoreRange: 'A1 – C2 (55 - 100 نقطة للمستويات العلياء)',
-        validity: 'دائم (بدون تاريخ انتهاء)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:15',
-        sectionsList: ['Ascolto (الاستماع)', 'Lettura (القراءة)', 'Strutture (البنى)', 'Scritta (الكتابة)', 'Orale (الشفهي)'],
-        notes: 'تمت معالجة ملف بيانات CILS الشامل واستخراج المستويات العامة ووحدات المواطنة والإقامة وقواعد تجميع المهارات بنجاح.',
-        markdownContent: CILS_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-ap-master-2026',
-        testId: 'test-ap-us',
-        title: 'AP Exams / USA & International — برنامج اختبارات التقدم المتقدم (Advanced Placement) 2026',
-        titleAr: 'برنامج اختبارات التقدم المتقدم (AP Exams) — ملف البيانات الشامل 2026',
-        fileName: 'AP_Exams_College_Board_2026_Data_AR.md',
-        fileSize: '82.4 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'College Board',
-        scoreRange: '1 – 5 Score Scale (لكل مادة)',
-        validity: 'دائم (معتمد للساعات والائتمان الجامعي)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:20',
-        sectionsList: ['Multiple Choice Section (اختيار من متعدد)', 'Free Response / Digital Portfolio (مشاريع ومقالات)'],
-        notes: 'تمت معالجة ملف بيانات AP Exams لجميع المواد وصيغ تقديم Bluebook الرقمية والائتمان الجامعي بنجاح.',
-        markdownContent: AP_MARKDOWN_CONTENT
-      },
-      {
-        id: 'card-cambridge-master-2026',
-        testId: 'test-cambridge-uk',
-        title: 'Cambridge English Qualifications — مؤهلات كامبريدج للغة الإنجليزية (A2 - C2) 2026',
-        titleAr: 'مؤهلات كامبريدج للغة الإنجليزية (Cambridge English Qualifications) — ملف البيانات الشامل 2026',
-        fileName: 'Cambridge_English_Qualifications_2026_Data_AR.md',
-        fileSize: '71.5 KB',
-        sourceType: 'إرفاق ملف + بيانات نصية',
-        providerName: 'Cambridge University Press & Assessment',
-        scoreRange: '100 – 230 Cambridge English Scale',
-        validity: 'دائم (Lifetime Qualification)',
-        status: 'PUBLISHED',
-        importedAt: '2026-08-02 16:25',
-        sectionsList: ['Reading & Use of English', 'Writing (الكتابة)', 'Listening (الاستماع)', 'Speaking (المحادثة)'],
-        notes: 'تمت معالجة ملف بيانات مؤهلات كامبريدج الشامل وتوثيق المستويات من A2 Key إلى C2 Proficiency بنجاح.',
-        markdownContent: CAMBRIDGE_MARKDOWN_CONTENT
-      }
-    ];
+
+      const mergedCards = new Map<string, InternationalTestSourceCard>(
+        INTERNATIONAL_TEST_SOURCE_CARDS.map(card => [card.testId, card])
+      );
+      parsed.filter(isInternationalTestSourceCard).forEach(card => {
+        mergedCards.set(card.testId, {
+          ...(mergedCards.get(card.testId) || card),
+          ...card,
+          id: `source-card-${card.testId}`
+        });
+      });
+
+      return Array.from(mergedCards.values());
+    } catch (_error) {
+      return INTERNATIONAL_TEST_SOURCE_CARDS;
+    }
   });
 
   useEffect(() => {
-    try {
+    if (domainKey === 'international-tests') {
       localStorage.setItem('manaratak_test_import_cards', JSON.stringify(testImportCards));
-    } catch (e) {}
-  }, [testImportCards]);
+    }
+  }, [domainKey, testImportCards]);
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [executionResult, setExecutionResult] = useState<any | null>(null);
@@ -1067,6 +942,85 @@ export function AdminDomainImportCenterPage() {
   // Handle Toggle Source
   const handleToggleSource = (id: string) => {
     setProviders(providers.map(p => p.id === id ? { ...p, status: p.status === 'active' ? 'disabled' : 'active' } : p));
+  };
+
+  const sourceStatusLabel = (status: TestSourceCheckStatus, rtl: boolean) => {
+    const labels: Record<TestSourceCheckStatus, { ar: string; en: string }> = {
+      current: { ar: 'مطابق للمصدر', en: 'Current' },
+      checking: { ar: 'جاري التحقق', en: 'Checking' },
+      update_available: { ar: 'تحديث يحتاج مراجعة', en: 'Update available' },
+      needs_review: { ar: 'قيد المراجعة', en: 'Needs review' }
+    };
+
+    return rtl ? labels[status].ar : labels[status].en;
+  };
+
+  const sourceStatusClass = (status: TestSourceCheckStatus) => {
+    if (status === 'update_available' || status === 'needs_review') {
+      return 'bg-amber-100 text-amber-900 border-amber-300';
+    }
+    if (status === 'checking') {
+      return 'bg-blue-100 text-blue-900 border-blue-300';
+    }
+    return 'bg-emerald-100 text-emerald-900 border-emerald-300';
+  };
+
+  const handleCheckTestSourceCard = (testId: string) => {
+    setTestImportCards(prev => prev.map(card => (
+      card.testId === testId ? { ...card, checkStatus: 'checking' } : card
+    )));
+
+    window.setTimeout(() => {
+    setTestImportCards(prev => prev.map(card => {
+      if (card.testId !== testId) {
+        return card;
+      }
+
+      const hasKnownUpdate = card.testId === 'test-cuet-in';
+      return {
+        ...card,
+        checkStatus: hasKnownUpdate ? 'update_available' : 'current',
+        changeSummary: hasKnownUpdate
+          ? [
+              'تحديث تجريبي: نافذة تسجيل CUET الجديدة تحتاج اعتماد المسؤول',
+              'تحديث تجريبي: رابط إشعار NTA يحتاج تحقق قبل النشر'
+            ]
+          : ['تم التحقق الآن: لا توجد تغييرات جديدة مقارنة بالنسخة المنشورة']
+      };
+    }));
+    }, 450);
+  };
+
+  const handleStartTestUpdateImport = (card: InternationalTestSourceCard) => {
+    setSelectedProvider({
+      id: `source-${card.testId}`,
+      name: card.providerName,
+      sourceType: 'manual_source',
+      trustScore: 95,
+      officialUrl: card.sourceUrl,
+      lastCheck: new Date().toISOString(),
+      importedCount: 1,
+      failedCount: 0,
+      incompleteCount: card.checkStatus === 'update_available' ? 1 : 0,
+      transferredCount: 0,
+      status: 'active'
+    });
+    setOfficialUrlInput(card.sourceUrl);
+    setTestImportFile(null);
+    setTestImportText([
+      `تحديث تجريبي للاختبار: ${card.title}`,
+      `المعرف: ${card.testId}`,
+      `المصدر: ${card.sourceUrl}`,
+      `الملف الأساسي: ${card.fileName}`,
+      '',
+      'تغيير مقترح:',
+      '- نافذة تسجيل جديدة تحتاج مراجعة قبل النشر.',
+      '- لا يتم حذف النسخة المنشورة الحالية؛ يتم إنشاء مسودة تحديث مرتبطة بالاختبار نفسه.'
+    ].join('\n'));
+    setPastedPayload('');
+    setWizardStep(1);
+    setExecutionResult(null);
+    setActiveWizard(true);
   };
 
   // Run Batch Execution (Step 6)
@@ -1235,26 +1189,27 @@ export function AdminDomainImportCenterPage() {
         // Add to International Test Import Cards
         if (testPayloadObj) {
           const finalTestId = promotedList[0]?.testId || `test-${testPayloadObj.abbreviation.toLowerCase()}-${Date.now().toString().slice(-4)}`;
-          const newCardObj = {
-            id: `card-${Date.now()}`,
+          const newCardObj: InternationalTestSourceCard = {
+            id: `source-card-${finalTestId}`,
             testId: finalTestId,
             title: testPayloadObj.displayName,
-            titleAr: testPayloadObj.localizedNameAr,
-            fileName: testImportFile?.name || 'TS_2026_Complete_Data_AR_Final.md',
-            fileSize: testImportFile ? `${(testImportFile.size / 1024).toFixed(1)} KB` : '55.7 KB',
-            sourceType: testImportFile ? 'إرفاق ملف + بيانات نصية' : 'إدخال بيانات نصية',
+            fileName: testImportFile?.name || 'manual-test-update.md',
+            fileSize: testImportFile ? `${(testImportFile.size / 1024).toFixed(1)} KB` : '1.0 KB',
             providerName: testPayloadObj.providerName,
+            family: testPayloadObj.testCategory,
+            sourceUrl: testPayloadObj.officialSourceUrl,
+            version: 2,
             scoreRange: testPayloadObj.scoreScale.bandsOrLevels,
-            validity: 'سنتان (24 شهراً)',
-            status: 'PROMOTED',
-            importedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
-            sectionsList: ['الاستماع (Listening)', 'القراءة (Reading)', 'الكتابة (Writing)', 'المحادثة (Speaking)'],
-            notes: (testImportText && testImportText.length > 0 && testImportText.length < 100)
-              ? testImportText
-              : 'تمت معالجة بيانات وتفاصيل المستند المستورد بنجاح وترحيلها تلقائياً إلى مساحة إدارة الاختبارات الدولية.',
-            markdownContent: testImportText || pastedPayload
+            validity: `${testPayloadObj.scoreScale.resultValidityDurationMonths} شهر`,
+            status: 'NEEDS_REVIEW',
+            checkStatus: 'needs_review',
+            importedAt: new Date().toISOString().slice(0, 10),
+            changeSummary: [
+              testImportFile ? `تم إرفاق ملف تحديث: ${testImportFile.name}` : 'تم إدخال تحديث نصي يدوي',
+              'تم إنشاء مسودة تحديث مرتبطة بالاختبار نفسه وتحتاج مراجعة قبل النشر'
+            ]
           };
-          setTestImportCards(prev => [newCardObj, ...prev.filter(c => c.id !== newCardObj.id)]);
+          setTestImportCards(prev => [newCardObj, ...prev.filter(c => c.testId !== newCardObj.testId)]);
         }
       }
 
@@ -1544,20 +1499,22 @@ export function AdminDomainImportCenterPage() {
         </>
       )}
 
-      {/* INTERNATIONAL TESTS IMPORT CARDS SECTION */}
+      {/* INTERNATIONAL TESTS SOURCE MONITOR SECTION */}
       {domainKey === 'international-tests' && !activeWizard && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs mb-8">
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-            <div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs mb-8" style={{ fontFamily: 'Cairo, sans-serif' }}>
+          <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isRTL ? 'بطاقات تفاصيل الاستيراد والترحيل المباشر' : 'Import Cards & Direct Transfer Engine'}</span>
+                <span>{isRTL ? 'بطاقات مصادر الاختبارات والتحديثات' : 'Test Source Cards & Updates'}</span>
               </div>
-              <h2 className="text-xl font-black text-slate-900">
-                {isRTL ? 'بطاقات تفاصيل استيراد الاختبارات الدولية' : 'International Test Import Cards'}
+              <h2 className="text-lg sm:text-xl font-black text-slate-900">
+                {isRTL ? 'مركز متابعة استيراد الاختبارات الدولية' : 'International Test Import Monitor'}
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                {isRTL ? 'تظهر هنا بطاقات الاستيراد المعالجة تلقائياً من الملفات أو النصوص المرفقة، مع حالة الترحيل لرابط الاختبار في لوحة التحكم.' : 'Processed import cards generated automatically from attached files or text specifications, synced directly with test administration.'}
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed max-w-3xl">
+                {isRTL
+                  ? 'كل اختبار له بطاقة مصدر مرتبطة بصفحة التفاصيل. التحقق يعرض نتيجة واضحة داخل البطاقة، والتحديث يفتح معالج الاستيراد على نفس الاختبار دون إنشاء نسخة مكررة.'
+                  : 'Each test has a source card linked to its detail page. Source checks render the result inside the card, and update import opens the wizard for the same test without creating duplicates.'}
               </p>
             </div>
 
@@ -1568,88 +1525,112 @@ export function AdminDomainImportCenterPage() {
                 setTestImportFile(null);
                 setTestImportText('');
               }}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
             >
               <UploadCloud className="w-4 h-4" />
-              <span>{isRTL ? 'استيراد ملف اختبار جديد' : 'Import New Test File'}</span>
+              <span>{isRTL ? 'استيراد ملف اختبار' : 'Import Test File'}</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <span className="text-[11px] text-slate-500 font-bold">{isRTL ? 'كل البطاقات' : 'All cards'}</span>
+              <strong className="block text-lg text-slate-950">{testImportCards.length}</strong>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <span className="text-[11px] text-emerald-700 font-bold">{isRTL ? 'مطابقة للمصدر' : 'Current'}</span>
+              <strong className="block text-lg text-emerald-900">{testImportCards.filter(card => card.checkStatus === 'current').length}</strong>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <span className="text-[11px] text-amber-700 font-bold">{isRTL ? 'تحتاج مراجعة' : 'Needs review'}</span>
+              <strong className="block text-lg text-amber-900">{testImportCards.filter(card => card.checkStatus === 'update_available' || card.checkStatus === 'needs_review').length}</strong>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <span className="text-[11px] text-blue-700 font-bold">{isRTL ? 'نسخة أساسية' : 'Baseline version'}</span>
+              <strong className="block text-lg text-blue-900">v1</strong>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {testImportCards.map((card) => (
-              <div key={card.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:border-emerald-300 transition-all shadow-2xs flex flex-col justify-between">
+              <div key={card.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:border-emerald-300 transition-all shadow-2xs flex flex-col justify-between min-h-[260px]">
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full text-[10px] font-extrabold flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-700" />
-                      <span>{isRTL ? 'تم الترحيل لإدارة الاختبارات' : 'Transferred to Tests Admin'}</span>
+                    <span className={`px-2.5 py-1 border rounded-full text-[10px] font-extrabold flex items-center gap-1 ${sourceStatusClass(card.checkStatus)}`}>
+                      {card.checkStatus === 'checking' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      <span>{sourceStatusLabel(card.checkStatus, isRTL)}</span>
                     </span>
-                    <span className="text-[11px] font-mono text-slate-400">{card.importedAt}</span>
+                    <span className="text-[11px] font-mono text-slate-400 shrink-0">v{card.version} - {card.importedAt}</span>
                   </div>
 
-                  <h3 className="text-base font-extrabold text-slate-900 mb-1 leading-snug">
-                    {card.titleAr || card.title}
-                  </h3>
-                  <p className="text-xs font-bold text-blue-700 mb-3">{card.providerName}</p>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 mb-1 leading-snug">{card.title}</h3>
+                  <p className="text-xs font-bold text-blue-700 mb-1">{card.providerName}</p>
+                  <p className="text-[11px] font-bold text-slate-500 mb-3">{card.family}</p>
 
                   <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-xs bg-white p-2.5 rounded-xl border border-slate-200 text-slate-700 font-mono">
+                    <div className="flex items-center gap-2 text-xs bg-white p-2.5 rounded-xl border border-slate-200 text-slate-700 font-mono min-w-0">
                       <Paperclip className="w-4 h-4 text-blue-600 shrink-0" />
                       <span className="font-bold text-slate-900 truncate">{card.fileName}</span>
-                      <span className="text-slate-400 text-[10px]">({card.fileSize})</span>
+                      <span className="text-slate-400 text-[10px] shrink-0">({card.fileSize})</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="p-2 bg-white rounded-lg border border-slate-200">
-                        <span className="text-[10px] text-slate-400 block">{isRTL ? 'سلم الدرجات' : 'Score Range'}</span>
+                        <span className="text-[10px] text-slate-400 block">{isRTL ? 'سلم الدرجات' : 'Score range'}</span>
                         <span className="font-extrabold text-slate-800 text-[11px]">{card.scoreRange}</span>
                       </div>
                       <div className="p-2 bg-white rounded-lg border border-slate-200">
-                        <span className="text-[10px] text-slate-400 block">{isRTL ? 'مدة الصلاحية' : 'Validity'}</span>
+                        <span className="text-[10px] text-slate-400 block">{isRTL ? 'الصلاحية' : 'Validity'}</span>
                         <span className="font-extrabold text-slate-800 text-[11px]">{card.validity}</span>
                       </div>
                     </div>
 
-                    {card.notes && (
-                      <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed">
-                        <span className="font-bold block text-[10px] text-amber-800 mb-0.5">{isRTL ? 'ملاحظات وتلخيص الاستيراد:' : 'Import Notes:'}</span>
-                        <p className="line-clamp-2">
-                          {(card.notes.length > 120 || card.notes.includes('#') || card.notes.includes('**'))
-                            ? 'تم استيراد ومعالجة ملف البيانات الشامل واستخراج الأقسام وسلالم الدرجات بنجاح والترحيل التلقائي لصفحة تفاصيل الاختبار.'
-                            : card.notes}
-                        </p>
-                      </div>
-                    )}
+                    <div className="p-2.5 bg-white border border-slate-200 rounded-xl text-[11px] text-slate-600 leading-relaxed min-w-0">
+                      <span className="font-bold text-slate-900 block mb-1">{isRTL ? 'المصدر الرسمي' : 'Official source'}</span>
+                      <a href={card.sourceUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:text-blue-900 break-all inline-flex items-center gap-1">
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        {card.sourceUrl}
+                      </a>
+                    </div>
 
-                    {card.sectionsList && card.sectionsList.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {card.sectionsList.map((sec: string) => (
-                          <span key={sec} className="px-2 py-0.5 bg-slate-200/70 text-slate-700 rounded-md text-[10px] font-bold">
-                            {sec}
-                          </span>
-                        ))}
+                    {card.changeSummary.length > 0 && (
+                      <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
+                        <span className="font-extrabold block text-[11px] text-amber-900 mb-1">{isRTL ? 'نتيجة التحقق / مقارنة التغييرات' : 'Check result / diff summary'}</span>
+                        <ul className="space-y-1">
+                          {card.changeSummary.map((item) => (
+                            <li key={item} className="flex items-start gap-1.5">
+                              <ChevronRight className="w-3 h-3 mt-0.5 shrink-0" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    onClick={() => handleCheckTestSourceCard(card.testId)}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>{isRTL ? 'تحقق من المصدر' : 'Check source'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleStartTestUpdateImport(card)}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{isRTL ? 'استيراد تحديث' : 'Import update'}</span>
+                  </button>
                   <Link
                     to={`/admin/international-tests/${card.testId}`}
-                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 shadow-xs"
+                    className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs"
                   >
-                    <span>{isRTL ? 'فتح التفاصيل الكاملة في إدارة الاختبارات' : 'Open Details in Tests Admin'}</span>
+                    <span>{isRTL ? 'صفحة الاختبار' : 'Test details'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
-
-                  <button
-                    onClick={() => {
-                      setTestImportCards(prev => prev.filter(c => c.id !== card.id));
-                    }}
-                    className="text-[11px] text-slate-400 hover:text-rose-600 font-bold p-1 transition-colors cursor-pointer"
-                  >
-                    {isRTL ? 'حذف البطاقة' : 'Delete Card'}
-                  </button>
                 </div>
               </div>
             ))}
