@@ -163,6 +163,18 @@ type MarkdownSection = {
   content: string;
 };
 
+type ImportVersion = {
+  id: string;
+  versionNumber: number;
+  status: string;
+  sourceFileName?: string;
+  sourceHash?: string;
+  importedAt?: string;
+  publishedAt?: string;
+  changeSummary?: Record<string, unknown>;
+  contentBlocks?: unknown[];
+};
+
 const markdownRegistry = [
   { match: ['ielts'], content: IELTS_MARKDOWN_CONTENT },
   { match: ['toefl'], content: TOEFL_MARKDOWN_CONTENT },
@@ -233,6 +245,25 @@ function asString(value: unknown): string | undefined {
 
 function asSectionArray(value: unknown): TestSection[] {
   return Array.isArray(value) ? value.filter((item): item is TestSection => !!item && typeof item === 'object') : [];
+}
+
+function asImportVersion(value: unknown): ImportVersion | null {
+  const record = asRecord(value);
+  const id = asString(record.id);
+  const versionNumber = typeof record.versionNumber === 'number' ? record.versionNumber : undefined;
+  const status = asString(record.status);
+  if (!id || versionNumber === undefined || !status) return null;
+  return {
+    id,
+    versionNumber,
+    status,
+    sourceFileName: asString(record.sourceFileName),
+    sourceHash: asString(record.sourceHash),
+    importedAt: asString(record.importedAt),
+    publishedAt: asString(record.publishedAt),
+    changeSummary: asRecord(record.changeSummary),
+    contentBlocks: Array.isArray(record.contentBlocks) ? record.contentBlocks : []
+  };
 }
 
 function getImportedCards(): ImportedCard[] {
@@ -349,6 +380,7 @@ function DetailActionButton({ icon: Icon, label, tone = 'default' }: { icon: Rea
 export function AdminInternationalTestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [test, setTest] = useState<ResolvedTest | null>(null);
+  const [importVersions, setImportVersions] = useState<ImportVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -366,6 +398,13 @@ export function AdminInternationalTestDetailPage() {
           record = await ApiClient.getAdminInternationalTestById(id) as AdminTestRecord;
         } catch {
           record = undefined;
+        }
+
+        try {
+          const versions = await ApiClient.getAdminInternationalTestVersions(id);
+          setImportVersions(versions.map(asImportVersion).filter((version): version is ImportVersion => !!version));
+        } catch {
+          setImportVersions([]);
         }
 
         const importedCard = getImportedCards().find((card) => card.testId === id || card.id === id);
@@ -608,13 +647,42 @@ export function AdminInternationalTestDetailPage() {
           <section className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm space-y-3">
             <h2 className="text-[16px] font-black">الاستيراد والنسخ</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <TimelineCard icon={FileClock} title="النسخة الحالية" value={test.status === 'PUBLISHED' ? 'منشورة' : statusLabel(test.status)} />
-              <TimelineCard icon={UploadCloud} title="مصدر الملف" value={test.sourceImportRecordId || 'ملف محفوظ داخل المشروع'} />
-              <TimelineCard icon={GitCompareArrows} title="المقارنة" value="جاهزة لربط سجل النسخ من API" />
+              <TimelineCard icon={FileClock} title="النسخة الحالية" value={importVersions[0] ? `v${importVersions[0].versionNumber} - ${statusLabel(importVersions[0].status)}` : statusLabel(test.status)} />
+              <TimelineCard icon={UploadCloud} title="مصدر الملف" value={importVersions[0]?.sourceFileName || test.sourceImportRecordId || 'ملف محفوظ داخل المشروع'} />
+              <TimelineCard icon={GitCompareArrows} title="المقارنة" value={asString(importVersions[0]?.changeSummary?.comparisonStatus) || 'BASELINE_VERSION'} />
             </div>
-            <p className="text-[13px] leading-7 text-slate-600">
-              هذه التبويبة جاهزة لعرض النسخ والتغييرات عند ربط واجهة الاستيراد بالمسارات الجديدة التي أضفناها: إنشاء نسخة مسودة، قراءة سجل النسخ، وحفظ الأقسام الجديدة كمراجعة.
-            </p>
+            {importVersions.length > 0 ? (
+              <div className="space-y-2">
+                {importVersions.map((version) => (
+                  <div key={version.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[14px] font-black text-slate-900">نسخة {version.versionNumber} - {statusLabel(version.status)}</p>
+                        <p className="text-[12px] font-bold text-slate-500 mt-1">{version.sourceFileName || 'مصدر غير محدد'}</p>
+                      </div>
+                      <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-black text-slate-600">
+                        {version.contentBlocks?.length ?? 0} كتلة
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[12px]">
+                      <span className="rounded-xl bg-white border border-slate-200 px-2 py-1 font-bold text-slate-600">
+                        الاستيراد: {version.importedAt ? new Date(version.importedAt).toLocaleDateString('ar') : 'غير محدد'}
+                      </span>
+                      <span className="rounded-xl bg-white border border-slate-200 px-2 py-1 font-bold text-slate-600">
+                        النشر: {version.publishedAt ? new Date(version.publishedAt).toLocaleDateString('ar') : 'غير منشور'}
+                      </span>
+                      <span className="rounded-xl bg-white border border-slate-200 px-2 py-1 font-mono text-[11px] text-slate-500 truncate" title={version.sourceHash}>
+                        {version.sourceHash || 'no-hash'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] leading-7 text-slate-600">
+                لا توجد نسخ محفوظة من API بعد. عند تشغيل seed الجديد سيتم إنشاء نسخة أساسية منشورة لكل اختبار وربطها بملفها وبصمتها.
+              </p>
+            )}
           </section>
         )}
 

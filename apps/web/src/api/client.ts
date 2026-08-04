@@ -907,6 +907,16 @@ export class ApiClient {
     return res.json();
   }
 
+  static async getAdminInternationalTestVersions(id: string): Promise<unknown[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/international-tests/${encodeURIComponent(id)}/import-versions`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch international test versions');
+    }
+    const data: unknown = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
   static async executeAdminInternationalTestAction(id: string, action: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/admin/international-tests/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',
