@@ -19,7 +19,8 @@ import {
   UpsertInternationalTestPreparationMaterialDto,
   InternationalTestEvidenceDto,
   InternationalTestImportDraftRequestDto,
-  InternationalTestImportDraftResultDto
+  InternationalTestImportDraftResultDto,
+  InternationalTestVersionDto
 } from './contracts';
 import { InternationalTestStatus } from './enums';
 
@@ -63,4 +64,5 @@ export interface IInternationalTestRepository {
   addEvidence?(testId: string, data: InternationalTestEvidenceDto): Promise<InternationalTestEvidenceDto>;
 
   createImportDraftVersion?(testId: string, data: InternationalTestImportDraftRequestDto): Promise<InternationalTestImportDraftResultDto>;
+  listImportVersions?(testId: string): Promise<InternationalTestVersionDto[]>;
 }

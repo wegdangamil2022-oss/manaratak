@@ -53,6 +53,10 @@ export class InternationalTestAdminRouter {
       res.status(201).json(await internationalTestAdminUseCases.createImportDraftVersion(req.params.id, parsed));
     }));
 
+    router.get('/:id/import-versions', asyncHandler(async (req: Request, res: Response) => {
+      res.json(await internationalTestAdminUseCases.listImportVersions(req.params.id));
+    }));
+
     router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
       res.json(await internationalTestAdminUseCases.get(req.params.id));
     }));

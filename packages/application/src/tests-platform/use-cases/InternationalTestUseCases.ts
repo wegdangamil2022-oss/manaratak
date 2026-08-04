@@ -24,7 +24,8 @@ import {
   UpsertInternationalTestPreparationMaterialDto,
   InternationalTestEvidenceDto,
   InternationalTestImportDraftRequestDto,
-  InternationalTestImportDraftResultDto
+  InternationalTestImportDraftResultDto,
+  InternationalTestVersionDto
 } from '@manaratak/domain';
 
 export class InternationalTestAdminUseCases {
@@ -230,6 +231,12 @@ export class InternationalTestAdminUseCases {
       ...data,
       sourceFileName: data.sourceFileName.trim()
     });
+  }
+
+  public async listImportVersions(testId: string): Promise<InternationalTestVersionDto[]> {
+    await this.get(testId);
+    if (!this.repository.listImportVersions) return [];
+    return this.repository.listImportVersions(testId);
   }
 }
 

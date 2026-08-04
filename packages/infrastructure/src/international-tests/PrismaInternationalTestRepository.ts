@@ -22,6 +22,7 @@ import {
   InternationalTestEvidenceDto,
   InternationalTestImportDraftRequestDto,
   InternationalTestImportDraftResultDto,
+  InternationalTestVersionDto,
   InternationalTestStatus,
   InternationalTestDeliveryMode
 } from '@manaratak/domain';
@@ -39,15 +40,28 @@ const defaultInclude = {
 
 type InternationalTestVersionRecord = {
   id: string;
+  testId?: string;
   versionNumber: number;
   status: string;
+  sourceImportRecordId?: string | null;
   sourceFileName?: string | null;
+  sourceUri?: string | null;
   sourceHash?: string | null;
+  importedAt?: Date | null;
+  publishedAt?: Date | null;
+  approvedBy?: string | null;
+  supersededAt?: Date | null;
+  effectiveFrom?: Date | null;
+  effectiveTo?: Date | null;
+  changeSummary?: unknown;
+  rawContentBlocks?: unknown;
+  metadata?: unknown;
   contentBlocks?: unknown[];
 };
 
 type InternationalTestVersionDelegate = {
-  findFirst(args: Record<string, unknown>): Promise<{ versionNumber: number } | null>;
+  findFirst(args: Record<string, unknown>): Promise<InternationalTestVersionRecord | null>;
+  findMany(args: Record<string, unknown>): Promise<InternationalTestVersionRecord[]>;
   create(args: Record<string, unknown>): Promise<InternationalTestVersionRecord>;
 };
 
@@ -570,10 +584,11 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
     const latestVersion = await prismaWithVersions.internationalTestVersion.findFirst({
       where: { testId },
       orderBy: { versionNumber: 'desc' },
-      select: { versionNumber: true }
+      select: { versionNumber: true, metadata: true }
     });
     const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
     const hasRawContent = typeof data.rawContent === 'string' && data.rawContent.trim().length > 0;
+    const changeSummary = this.buildImportChangeSummary(latestVersion?.metadata, data.detectedFields);
     const rawContentBlocks = hasRawContent
       ? [
           {
@@ -596,11 +611,7 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
         sourceUri: data.sourceUri,
         sourceHash: data.sourceHash,
         importedAt: new Date(),
-        changeSummary: {
-          comparisonStatus: 'PENDING_COMPARISON',
-          createdFromExistingTest: true,
-          deletedSourceFieldsRequireReview: true
-        },
+        changeSummary,
         rawContentBlocks,
         metadata: {
           ...(data.importedBy ? { importedBy: data.importedBy } : {}),
@@ -644,7 +655,100 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
     };
   }
 
+  async listImportVersions(testId: string): Promise<InternationalTestVersionDto[]> {
+    const existingTest = await this.prisma.internationalTest.findUnique({ where: { id: testId } });
+    if (!existingTest) {
+      throw new Error(`International test with id ${testId} not found`);
+    }
+
+    const prismaWithVersions = this.prisma as PrismaClientWithInternationalTestVersions;
+    const records = await prismaWithVersions.internationalTestVersion.findMany({
+      where: { testId },
+      orderBy: [{ versionNumber: 'desc' }],
+      include: { contentBlocks: true }
+    });
+
+    return records.map((record) => this.mapVersionToDto(record, testId));
+  }
+
   // --- Private Mapping Helpers ---
+
+  private buildImportChangeSummary(
+    previousMetadata: unknown,
+    detectedFields: Record<string, unknown> | undefined
+  ): Record<string, unknown> {
+    if (!detectedFields) {
+      return {
+        comparisonStatus: 'PENDING_FIELD_MAPPING',
+        createdFromExistingTest: true,
+        addedFields: [],
+        removedFields: [],
+        changedFields: []
+      };
+    }
+
+    const previousFields = this.extractDetectedFields(previousMetadata);
+    const previousKeys = Object.keys(previousFields);
+    const currentKeys = Object.keys(detectedFields);
+    const addedFields = currentKeys.filter((key) => !previousKeys.includes(key));
+    const removedFields = previousKeys.filter((key) => !currentKeys.includes(key));
+    const changedFields = currentKeys.filter((key) => {
+      if (!previousKeys.includes(key)) return false;
+      return JSON.stringify(previousFields[key]) !== JSON.stringify(detectedFields[key]);
+    });
+
+    return {
+      comparisonStatus: previousKeys.length > 0 ? 'COMPLETED' : 'BASELINE_VERSION',
+      createdFromExistingTest: true,
+      addedFields,
+      removedFields,
+      changedFields,
+      newFieldsRequireReview: addedFields.length > 0,
+      deletedSourceFieldsRequireReview: removedFields.length > 0
+    };
+  }
+
+  private extractDetectedFields(metadata: unknown): Record<string, unknown> {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
+    const detectedFields = (metadata as Record<string, unknown>).detectedFields;
+    if (!detectedFields || typeof detectedFields !== 'object' || Array.isArray(detectedFields)) return {};
+    return detectedFields as Record<string, unknown>;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return value as Record<string, unknown>;
+  }
+
+  private asRecordArray(value: unknown): Record<string, unknown>[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    return value.filter((item): item is Record<string, unknown> => {
+      return !!item && typeof item === 'object' && !Array.isArray(item);
+    });
+  }
+
+  private mapVersionToDto(record: InternationalTestVersionRecord, fallbackTestId: string): InternationalTestVersionDto {
+    return {
+      id: record.id,
+      testId: record.testId ?? fallbackTestId,
+      versionNumber: record.versionNumber,
+      status: record.status as InternationalTestVersionDto['status'],
+      sourceImportRecordId: record.sourceImportRecordId ?? undefined,
+      sourceFileName: record.sourceFileName ?? undefined,
+      sourceUri: record.sourceUri ?? undefined,
+      sourceHash: record.sourceHash ?? undefined,
+      importedAt: record.importedAt ?? undefined,
+      publishedAt: record.publishedAt ?? undefined,
+      approvedBy: record.approvedBy ?? undefined,
+      supersededAt: record.supersededAt ?? undefined,
+      effectiveFrom: record.effectiveFrom ?? undefined,
+      effectiveTo: record.effectiveTo ?? undefined,
+      changeSummary: this.asRecord(record.changeSummary),
+      rawContentBlocks: this.asRecordArray(record.rawContentBlocks),
+      contentBlocks: this.asRecordArray(record.contentBlocks) as InternationalTestVersionDto['contentBlocks'],
+      metadata: this.asRecord(record.metadata)
+    };
+  }
 
   private mapToDto(record: any): InternationalTestDto {
     if (!record) return null as any;
