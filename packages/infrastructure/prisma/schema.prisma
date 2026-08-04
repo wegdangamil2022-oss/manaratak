@@ -1,0 +1,719 @@
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- System & Core ---
+
+model Settings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// --- Settings Foundation ---
+
+model SettingDefinitionRecord {
+  id            String   @id
+  key           String   @unique
+  valueType     String
+  description   String?
+  defaultValue  Json?
+  isFeatureFlag Boolean  @default(false)
+  isDeprecated  Boolean  @default(false)
+  isSecret      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+
+model SettingAssignmentRecord {
+  id               String   @id
+  key              String
+  scopeLevel       String
+  scopeId          String
+  currentVersionId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  versions         SettingVersionRecord[]
+
+  @@unique([key, scopeLevel, scopeId])
+  @@index([key])
+  @@index([scopeLevel, scopeId])
+}
+
+model SettingVersionRecord {
+  id                  String   @id
+  assignmentId        String
+  value               Json
+  valueType           String
+  authorId            String?
+  createdAt           DateTime @default(now())
+  rollbackOfVersionId String?
+
+  assignment          SettingAssignmentRecord @relation(fields: [assignmentId], references: [id])
+
+  @@index([assignmentId, createdAt])
+}
+
+// --- Import Foundation ---
+
+model ImportBatch {
+  id               String   @id @default(uuid())
+  sourceSystem     String
+  dataType         String
+  batchStatus      String
+  totalRecords     Int      @default(0)
+  processedRecords Int      @default(0)
+  failedRecords    Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  records          ImportRecord[]
+
+  @@index([batchStatus])
+  @@index([dataType])
+  @@index([batchStatus, dataType])
+}
+
+model ImportRecord {
+  id                 String   @id @default(uuid())
+  batchId            String
+  status             String
+  rawPayload         Json
+  validationErrors   Json?
+  processingNotes    String?
+  sourceDedupKey     String?
+  promotedEntityId   String?
+  chunkIndex         Int?
+  recordOffset       Int?
+  sourceRowNumber    Int?
+  retentionExpiresAt DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  batch              ImportBatch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId])
+  @@index([batchId, status])
+  @@index([batchId, chunkIndex])
+  @@index([batchId, sourceDedupKey])
+  @@index([retentionExpiresAt])
+}
+
+// --- Universities ---
+
+model University {
+  id                  String   @id @default(uuid())
+  publicId            String   @unique
+  slug                String   @unique
+  canonicalName       String
+  canonicalDedupKey   String   @unique
+  displayName         String
+  country             String?
+  city                String?
+  institutionType     String?
+  officialWebsite     String?
+  status              String
+  completenessStatus  String
+  sourceUrl           String?
+  officialSourceUrl   String?
+  logoAssetId         String?
+  foundedYear         Int?
+  sourceImportRecordId String?
+  optionalFields      Json?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// --- Scholarships ---
+
+model Scholarship {
+  id                  String   @id @default(uuid())
+  publicId            String   @unique
+  slug                String   @unique
+  canonicalName       String
+  canonicalDedupKey   String   @unique
+  displayName         String
+  providerName        String?
+  status              String
+  completenessStatus  String
+  amountMinorUnits    String?
+  amountCurrencyCode  String?
+  isFullyFunded       Boolean  @default(false)
+  applicationDeadline DateTime?
+  officialWebsite     String?
+  sourceUrl           String?
+  optionalFields      Json?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// --- Majors ---
+
+model Major {
+  id                  String   @id @default(uuid())
+  publicId            String   @unique
+  slug                String   @unique
+  canonicalName       String
+  canonicalDedupKey   String   @unique
+  displayName         String
+  status              String
+  completenessStatus  String
+  facultyName         String?
+  optionalFields      Json?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// --- International Tests ---
+
+model InternationalTest {
+  id                  String   @id @default(uuid())
+  publicId            String   @unique
+  slug                String   @unique
+  canonicalName       String
+  canonicalDedupKey   String   @unique
+  displayName         String
+  status              String
+  completenessStatus  String
+  testCategory        String?
+  providerName        String?
+  optionalFields      Json?
+  sourceImportRecordId String?
+
+  localizedNameAr     String?
+  localizedNameEn     String?
+  abbreviation        String?
+  isPubliclyVisible   Boolean  @default(false)
+  isSourceVerified    Boolean  @default(false)
+  registrationRequirements String?
+  identificationRequirements String?
+  retakePolicy        String?
+  cancellationReschedulingNotes String?
+  accessibilityNotes  String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  variants            InternationalTestVariant[]
+  sections            InternationalTestSection[]
+  scoreScale          InternationalTestScoreScale?
+  fees                InternationalTestFeeMetadata[]
+  officialLinks       InternationalTestOfficialLink[]
+  availability        InternationalTestAvailability?
+  preparationMaterials InternationalTestPreparationMaterial[]
+  evidence            InternationalTestEvidence?
+
+  @@index([status])
+  @@index([testCategory])
+  @@index([providerName])
+  @@index([completenessStatus])
+  @@index([status, testCategory])
+  @@index([status, completenessStatus])
+  @@index([providerName, canonicalName])
+}
+
+model InternationalTestVariant {
+  id                  String   @id @default(uuid())
+  testId              String
+  variantName         String
+  deliveryMode        String
+  isActive            Boolean  @default(true)
+  specificOfficialUrl String?
+  administrativeNotes String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  test                InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([deliveryMode])
+}
+
+model InternationalTestSection {
+  id                  String   @id @default(uuid())
+  testId              String
+  sectionName         String
+  sectionType         String
+  durationMinutes     Int?
+  order               Int
+  questionTypes       Json?
+  scoreMinimum        Float?
+  scoreMaximum        Float?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  test                InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([testId, order])
+}
+
+model InternationalTestScoreScale {
+  id                          String   @id @default(uuid())
+  testId                      String   @unique
+  overallMinimum              Float
+  overallMaximum              Float
+  scoreIncrement              Float?
+  bandsOrLevels               Json?
+  passFailRules               String?
+  cefrEquivalency             String?
+  crossTestEquivalency        String?
+  resultValidityDurationMonths Int?
+  resultDeliveryTimeDays      Int?
+  scoreReportingUrl           String?
+
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  test                        InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+}
+
+model InternationalTestFeeMetadata {
+  id                   String   @id @default(uuid())
+  testId               String
+  feeType              String
+  amount               Float
+  currencyCode         String
+  hasRegionalVariation Boolean  @default(false)
+  validityWindowNotes  String?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  test                 InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([currencyCode])
+}
+
+model InternationalTestOfficialLink {
+  id          String   @id @default(uuid())
+  testId      String
+  linkType    String
+  url         String
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  test        InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([linkType])
+}
+
+model InternationalTestAvailability {
+  id                        String   @id @default(uuid())
+  testId                    String   @unique
+  availableCountryIds       Json
+  availableCityIds          Json?
+  onlineAvailabilityRegions Json?
+  testingWindowsNotes       String?
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  test                      InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+}
+
+model InternationalTestPreparationMaterial {
+  id          String   @id @default(uuid())
+  testId      String
+  materialType String
+  url         String?
+  assetId     String?
+  title       String
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  test        InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([assetId])
+}
+
+model InternationalTestEvidence {
+  id                      String    @id @default(uuid())
+  testId                  String    @unique
+  originalImportedName    String?
+  normalizedCanonicalName String?
+  deterministicKey        String?
+  sourceId                String?
+  sourceUrl               String?
+  contentHash             String?
+  retrievedAt             DateTime?
+  evidenceSnippet         String?
+  duplicateStatus         String?
+  conflictingFields       Json?
+  mergeSuggestions        Json?
+  sourceTrustLevel        String?
+
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  test                    InternationalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([deterministicKey])
+  @@index([contentHash])
+}
+
+// --- Student Workspace ---
+
+model AssetRecord {
+  id                        String    @id
+  reference                 String    @unique
+  ownerId                   String
+  ownerType                 String
+  lifecycleState            String
+  securityClassification    String
+  retentionCategory         String
+  retentionExpiresAt        DateTime?
+  quarantineStorageLocator  String?
+  cleanStorageLocator       String?
+  checksumAlgorithm         String?
+  checksumHash              String?
+  metadata                  Json
+  versionChain              Json?
+  sanitizationMetadata      Json?
+  malwareScanStatus         Json?
+  
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  archivedAt                DateTime?
+  deletedAt                 DateTime?
+  purgedAt                  DateTime?
+
+  @@index([ownerId, ownerType])
+  @@index([lifecycleState])
+}
+
+model StudentWorkspace {
+  id                  String   @id @default(uuid())
+  studentReferenceId  String   @unique
+  status              String
+  displayName         String?
+  preferredLanguage   String?
+  avatarAssetId       String?
+  layoutPreferences   Json?
+  notificationMatrix  Json?
+  metadata            Json?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  savedItems          StudentSavedItem[]
+}
+
+model StudentSavedItem {
+  id                  String   @id @default(uuid())
+  studentReferenceId  String
+  entityType          String
+  entityId            String
+  entitySlug          String?
+  displayName         String?
+  notes               String?
+  metadata            Json?
+  savedAt             DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  workspace           StudentWorkspace @relation(fields: [studentReferenceId], references: [studentReferenceId])
+}
+
+
+// --- Identity Foundation ---
+
+model IdentityRecord {
+  id              String   @id
+  type            String
+  status          String
+  
+  // Technical Metadata
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+  deletedBy       String?
+  deletedAt       DateTime?
+  version         Int      @default(1)
+
+  // Relations
+  user            UserRecord?
+  account         AccountRecord?
+}
+
+model UserRecord {
+  identityId        String   @id
+  
+  // Profile
+  displayName       String
+  avatarUrl         String?
+  preferredLanguage String?
+  timeZone          String?
+
+  // Contact Registry
+  primaryEmail      String
+  isEmailVerified   Boolean  @default(false)
+  primaryPhone      String?
+  isPhoneVerified   Boolean  @default(false)
+  alternativeContacts Json?
+
+  identity          IdentityRecord @relation(fields: [identityId], references: [id], onDelete: Cascade)
+}
+
+model AccountRecord {
+  identityId        String   @id
+  accessState       String
+  storageQuotaBytes Float    @default(0)
+  rateLimitMax      Int      @default(100)
+  rateLimitWindowMs Int      @default(60000)
+  configurationFlags Json?
+
+  identity          IdentityRecord @relation(fields: [identityId], references: [id], onDelete: Cascade)
+}
+
+// --- Authorization Foundation ---
+
+model RoleRecord {
+  id          String   @id
+  name        String
+  description String
+  permissions Json
+  policyIds   Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PolicyRecord {
+  id                String   @id
+  name              String
+  description       String
+  ruleType          String
+  ruleConfiguration String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model RoleAssignmentRecord {
+  id         String   @id
+  identityId String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  @@index([identityId])
+  @@index([roleId])
+}
+
+// --- Audit Foundation ---
+
+model AuditRecord {
+  id                     String    @id
+  reference              String    @unique
+  action                 String
+  category               String
+  severity               String
+  actorId                String
+  actorType              String
+  targetId               String
+  targetType             String
+  source                 String
+  timestamp              DateTime
+  contextMetadata        Json
+  complianceMetadata     Json?
+  correlationReference   String?
+  traceReference         String?
+  chainReference         String?
+  retentionPeriodInDays  Int?
+  retentionExpiresAt     DateTime?
+  lifecycleState         String    @default("RECORDED")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([action])
+  @@index([category])
+  @@index([severity])
+  @@index([correlationReference])
+  @@index([timestamp])
+}
+
+// --- Reference Data ---
+
+model ReferenceCountry {
+  id                  String   @id @default(uuid())
+  iso2Code            String   @unique
+  iso3Code            String   @unique
+  name                String
+  officialName        String?
+  region              String?
+  subregion           String?
+  defaultCurrencyCode String?
+  defaultLanguageCode String?
+  callingCode         String?
+  flagAssetId         String?
+  isActive            Boolean  @default(true)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([region])
+  @@index([isActive])
+  @@index([name])
+}
+
+model ReferenceCurrency {
+  id          String   @id @default(uuid())
+  isoCode     String   @unique
+  numericCode String?
+  name        String
+  symbol      String?
+  minorUnit   Int?
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([name])
+}
+
+model ReferenceLanguage {
+  id         String   @id @default(uuid())
+  isoCode    String   @unique
+  name       String
+  nativeName String?
+  direction  String
+  isActive   Boolean  @default(true)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([name])
+  @@index([direction])
+}
+
+model ReferenceCity {
+  id              String   @id @default(uuid())
+  countryIso2Code String
+  name            String
+  region          String?
+  timezone        String?
+  latitude        Float?
+  longitude       Float?
+  isActive        Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([countryIso2Code])
+  @@index([countryIso2Code, name])
+  @@index([region])
+  @@index([isActive])
+  @@index([timezone])
+}
+
+// --- Academic Taxonomy Foundation (Phase 08) ---
+
+model AcademicTaxonomyNode {
+  id               String                    @id @default(uuid())
+  deterministicKey String                    @unique
+  nodeType         String
+  canonicalCode    String
+  canonicalName    String
+  description      String?
+  status           String                    @default("DRAFT")
+  standardType     String                    @default("CUSTOM_NATIONAL")
+  standardCode     String?
+  localizedNames   Json?
+  metadata         Json?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  parentEdges      AcademicTaxonomyEdge[]    @relation("AcademicTaxonomyParentNode")
+  childEdges       AcademicTaxonomyEdge[]    @relation("AcademicTaxonomyChildNode")
+  aliases          AcademicTaxonomyAlias[]
+  sourceMappings   AcademicStandardMapping[] @relation("AcademicStandardMappingSourceNode")
+  targetMappings   AcademicStandardMapping[] @relation("AcademicStandardMappingTargetNode")
+
+  @@unique([nodeType, canonicalCode, standardType], name: "academicTaxonomyCanonicalKey")
+  @@index([nodeType])
+  @@index([status])
+  @@index([standardType, standardCode])
+  @@index([canonicalCode])
+  @@index([canonicalName])
+}
+
+model AcademicTaxonomyEdge {
+  id           String               @id @default(uuid())
+  parentNodeId String
+  childNodeId  String
+  isPrimary    Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+
+  parentNode   AcademicTaxonomyNode @relation("AcademicTaxonomyParentNode", fields: [parentNodeId], references: [id], onDelete: Restrict)
+  childNode    AcademicTaxonomyNode @relation("AcademicTaxonomyChildNode", fields: [childNodeId], references: [id], onDelete: Restrict)
+
+  @@unique([parentNodeId, childNodeId])
+  @@index([parentNodeId])
+  @@index([childNodeId])
+  @@index([isPrimary])
+}
+
+model AcademicTaxonomyAlias {
+  id              String               @id @default(uuid())
+  nodeId          String
+  locale          String?
+  alias           String
+  normalizedAlias String
+  createdAt       DateTime             @default(now())
+
+  node            AcademicTaxonomyNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, locale, normalizedAlias])
+  @@index([nodeId])
+  @@index([normalizedAlias])
+  @@index([locale, normalizedAlias])
+}
+
+model AcademicStandardMapping {
+  id             String               @id @default(uuid())
+  sourceNodeId   String
+  targetNodeId   String
+  sourceStandard String
+  targetStandard String
+  strength       String
+  confidence     Float?
+  notes          String?
+  createdAt      DateTime             @default(now())
+
+  sourceNode     AcademicTaxonomyNode @relation("AcademicStandardMappingSourceNode", fields: [sourceNodeId], references: [id], onDelete: Restrict)
+  targetNode     AcademicTaxonomyNode @relation("AcademicStandardMappingTargetNode", fields: [targetNodeId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceNodeId, targetNodeId, sourceStandard, targetStandard])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@index([sourceStandard, targetStandard])
+  @@index([strength])
+}
+

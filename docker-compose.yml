@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Relational Database Service (Postgres)
+  postgres:
+    image: postgres:15-alpine
+    container_name: manaratak-postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: manaratak
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d manaratak"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Distributed Cache & Queue Service
+  redis:
+    image: redis:7-alpine
+    container_name: manaratak-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Core API Backend Service
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: manaratak-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://root:password@postgres:5432/manaratak?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-at-least-32-characters-long-manaratak-key-phrase
+      - SESSION_SECRET=dev-session-secret-at-least-32-chars-long
+      - CSRF_SECRET=dev-csrf-secret-at-least-32-chars-long
+      - CORS_ORIGIN=http://localhost:8080
+      - ADMIN_AUTH_MODE=demo
+      - ADMIN_BEARER_TOKEN=admin-demo-bearer-token-must-be-at-least-32-chars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Public Facing Web Client (Static Assets via Nginx)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        - VITE_API_URL=/api/v1
+    container_name: manaratak-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+  # Admin Dashboard Portal (Static Assets via Nginx)
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api/v1
+    container_name: manaratak-admin
+    ports:
+      - "8081:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
