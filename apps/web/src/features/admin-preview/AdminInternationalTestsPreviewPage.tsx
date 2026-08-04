@@ -69,12 +69,6 @@ export function AdminInternationalTestsPreviewPage() {
         console.warn('Backend tests API unavailable, using fallback items:', fErr);
       }
       let items: TestItem[] = res?.data || [];
-      items = items.filter((item: any) => 
-        !(item.id.includes('sat') && !item.id.includes('csat') && !item.id.includes('gamsat')) && 
-        !item.id.includes('gre') &&
-        !(item.displayName.toLowerCase().includes('sat') && !item.displayName.toLowerCase().includes('csat') && !item.displayName.toLowerCase().includes('gamsat')) &&
-        !item.displayName.toLowerCase().includes('gre')
-      );
 
       // Fallback sample data if no tests returned from backend
       if (items.length === 0 && !statusFilter && !searchQuery) {
@@ -1268,9 +1262,7 @@ export function AdminInternationalTestsPreviewPage() {
               continue;
             }
 
-            if (card.testId && !items.some((i: any) => i.id === card.testId) && 
-                !(card.testId.includes('sat') && !card.testId.includes('csat')) && 
-                !card.testId.includes('gre')) {
+            if (card.testId && !items.some((i: any) => i.id === card.testId)) {
               items.unshift({
                 id: card.testId,
                 displayName: card.title || card.titleAr,

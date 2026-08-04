@@ -779,8 +779,6 @@ export function AdminDomainImportCenterPage() {
           for (const card of parsed) {
             const testId = card.testId || card.id || '';
             const titleLower = ((card.title || '') + ' ' + (card.titleAr || '') + ' ' + testId).toLowerCase();
-            if ((testId.includes('sat') && !testId.includes('csat')) || testId.includes('gre')) continue;
-            
             let key = testId;
             if (titleLower.includes('toefl') || titleLower.includes('توفل')) key = 'test-toefl-ibt';
             if (titleLower.includes('ielts') || titleLower.includes('آيلتس')) key = 'test-ielts-academic';
