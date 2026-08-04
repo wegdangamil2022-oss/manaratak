@@ -28,11 +28,64 @@ interface TestItem {
   updatedAt?: string;
 }
 
+interface AdminInternationalTestFilters {
+  page: number;
+  pageSize: number;
+  status?: string;
+}
+
+interface PaginatedAdminInternationalTests {
+  data?: TestItem[];
+  total?: number;
+}
+
+const testGroups = [
+  { key: '', labelAr: 'كل الأنواع', labelEn: 'All Types' },
+  { key: 'language', labelAr: 'اختبارات اللغة', labelEn: 'Language' },
+  { key: 'university_admission', labelAr: 'القبول الجامعي', labelEn: 'University Admission' },
+  { key: 'specialized_admission', labelAr: 'القبول التخصصي', labelEn: 'Specialized Admission' },
+  { key: 'professional_licensing', labelAr: 'الترخيص المهني', labelEn: 'Professional Licensing' },
+  { key: 'other', labelAr: 'أخرى', labelEn: 'Other' }
+];
+
+function resolveTestGroup(test: TestItem): string {
+  const text = `${test.id} ${test.displayName} ${test.nameEn ?? ''} ${test.category ?? ''}`.toLowerCase();
+  if (/(cpa|plab|usmle|pmp|licensure|licensing|professional certification|professional \/ medical|professional \/ management)/.test(text)) {
+    return 'professional_licensing';
+  }
+  if (/(dat|mcat|gamsat|ucat|imat|bmat|medical|dental|professional admission)/.test(text)) {
+    return 'specialized_admission';
+  }
+  if (/(sat|act|gre|gmat|ap exams|csat|csca|cuet|eju|a-level|alevel|abitur|clt|admission|college credit|qualification)/.test(text)) {
+    return 'university_admission';
+  }
+  if (/(ielts|toefl|duolingo|hsk|testdaf|jlpt|dele|delf|dalf|toeic|topik|language|english|french|spanish|chinese|japanese|german)/.test(text)) {
+    return 'language';
+  }
+  return 'other';
+}
+
+function groupLabel(groupKey: string): string {
+  return testGroups.find((group) => group.key === groupKey)?.labelAr ?? 'أخرى';
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    IMPORTED: 'مستورد',
+    READY_TO_REVIEW: 'بانتظار المراجعة',
+    READY_TO_PUBLISH: 'جاهز للنشر',
+    PUBLISHED: 'منشور',
+    ARCHIVED: 'مؤرشف'
+  };
+  return labels[status] ?? status;
+}
+
 export function AdminInternationalTestsPreviewPage() {
   const { t } = useTranslation();
   const demoUnlocked = localStorage.getItem('manaratak_demo_role') === 'admin';
 
   const [tests, setTests] = useState<TestItem[]>([]);
+  const [allTests, setAllTests] = useState<TestItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +112,10 @@ export function AdminInternationalTestsPreviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const filters: any = { page, pageSize: 100 };
+      const filters: AdminInternationalTestFilters = { page, pageSize: 100 };
       if (statusFilter) filters.status = statusFilter;
 
-      let res: any = { data: [] };
+      let res: PaginatedAdminInternationalTests = { data: [] };
       try {
         res = await ApiClient.getAdminInternationalTests(filters);
       } catch (fErr) {
@@ -1262,7 +1315,7 @@ export function AdminInternationalTestsPreviewPage() {
               continue;
             }
 
-            if (card.testId && !items.some((i: any) => i.id === card.testId)) {
+            if (card.testId && !items.some((i: TestItem) => i.id === card.testId)) {
               items.unshift({
                 id: card.testId,
                 displayName: card.title || card.titleAr,
@@ -1303,7 +1356,9 @@ export function AdminInternationalTestsPreviewPage() {
           uniqueItems.push(item);
         }
       }
-      items = uniqueItems;
+      const allLoadedItems = uniqueItems;
+      setAllTests(allLoadedItems);
+      items = allLoadedItems;
 
       // Client-side filtering
       if (searchQuery.trim()) {
@@ -1315,15 +1370,16 @@ export function AdminInternationalTestsPreviewPage() {
         );
       }
       if (categoryFilter) {
-        items = items.filter(i => i.category?.toLowerCase() === categoryFilter.toLowerCase());
+        items = items.filter(i => resolveTestGroup(i) === categoryFilter);
       }
 
       setTests(items);
       setTotal(res.total || items.length);
 
-      fetchCounts(items);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load international tests');
+      fetchCounts(allLoadedItems);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load international tests';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -1351,11 +1407,16 @@ export function AdminInternationalTestsPreviewPage() {
     if (!demoUnlocked) return;
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, categoryFilter, demoUnlocked]);
+  }, [page, statusFilter, categoryFilter, searchQuery, demoUnlocked]);
 
   if (!demoUnlocked) {
     return <Navigate to="/login" replace />;
   }
+
+  const groupSummary = testGroups.map((group) => ({
+    ...group,
+    count: group.key ? allTests.filter((test) => resolveTestGroup(test) === group.key).length : allTests.length
+  }));
 
   return (
     <div className="space-y-6">
@@ -1424,7 +1485,57 @@ export function AdminInternationalTestsPreviewPage() {
         ))}
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="ابحث باسم الاختبار أو الجهة أو النوع"
+              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50/60 pr-10 pl-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#0F4B3A] focus:bg-white"
+              dir="rtl"
+            />
+          </div>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setCategoryFilter('');
+              setStatusFilter('');
+            }}
+            className="h-11 px-4 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2"
+          >
+            <Filter className="w-4 h-4" />
+            <span>مسح التصفية</span>
+          </button>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {groupSummary.map((group) => (
+            <button
+              key={group.key || 'all'}
+              onClick={() => setCategoryFilter(group.key)}
+              className={`h-9 px-3 rounded-xl border text-[11px] font-black inline-flex items-center gap-2 ${
+                categoryFilter === group.key
+                  ? 'bg-[#0F4B3A] text-white border-[#0F4B3A]'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{group.labelAr}</span>
+              <span className={`px-1.5 py-0.5 rounded-lg ${
+                categoryFilter === group.key ? 'bg-white/15 text-white' : 'bg-white text-slate-500 border border-slate-200'
+              }`}>
+                {group.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="text-[11px] font-bold text-slate-500">
+          يعرض {tests.length} من {total || allTests.length} اختبار، مع التقسيم حسب عائلة الاختبار وليس حسب نصوص الملفات الخام.
+        </div>
+      </div>
 
       {/* LIGHTWEIGHT VERTICAL LIST / TABLE LAYOUT (Rule 1) */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
@@ -1464,6 +1575,7 @@ export function AdminInternationalTestsPreviewPage() {
                 <tr className="bg-slate-50/75 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
                   <th className="p-4">{t('test_name') || 'Test Name'}</th>
                   <th className="p-4">{t('official_provider') || 'Official Provider / Owner'}</th>
+                  <th className="p-4">نوع الاختبار</th>
                   <th className="p-4">{t('validity_duration') || 'Validity Duration'}</th>
                   <th className="p-4">{t('approx_fee') || 'Approx. Fee'}</th>
                   <th className="p-4">{t('lifecycle_status') || 'Status'}</th>
@@ -1493,14 +1605,21 @@ export function AdminInternationalTestsPreviewPage() {
                     {/* Official Provider */}
                     <td className="p-3.5">
                       <div className="font-medium text-slate-800">{test.providerName || test.provider || '-'}</div>
-                      {test.category && (
-                        <span className="inline-block mt-0.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                          {test.category}
-                        </span>
-                      )}
                       {test.createdAt && (
                         <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
                           Created: {new Date(test.createdAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="p-3.5">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-black">
+                        <Globe className="w-3.5 h-3.5 text-[#0F4B3A]" />
+                        <span>{groupLabel(resolveTestGroup(test))}</span>
+                      </div>
+                      {test.category && (
+                        <div className="text-[10px] text-slate-400 mt-1 max-w-[160px] truncate" title={test.category}>
+                          {test.category}
                         </div>
                       )}
                     </td>
@@ -1515,7 +1634,8 @@ export function AdminInternationalTestsPreviewPage() {
 
                     {/* Approx Fee (Optional allowed if space permits) */}
                     <td className="p-3.5">
-                      <span className="text-slate-700 font-medium">
+                      <span className="text-slate-700 font-medium inline-flex items-center gap-1">
+                        <DollarSign className="w-3.5 h-3.5 text-slate-400" />
                         {test.approxFee || 'N/A'}
                       </span>
                     </td>
@@ -1530,7 +1650,7 @@ export function AdminInternationalTestsPreviewPage() {
                         test.status === 'ARCHIVED' ? 'bg-slate-100 text-slate-700 border border-slate-200/50' :
                         'bg-amber-50 text-amber-700 border border-amber-200/50'
                       }`}>
-                        {test.status}
+                        {statusLabel(test.status)}
                       </span>
                     </td>
 
