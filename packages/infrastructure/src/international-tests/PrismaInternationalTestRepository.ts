@@ -69,6 +69,17 @@ type PrismaClientWithInternationalTestVersions = PrismaClient & {
   internationalTestVersion: InternationalTestVersionDelegate;
 };
 
+type InternationalTestContentBlockCreateInput = {
+  blockKey: string;
+  blockType: string;
+  title?: string;
+  locale?: string;
+  content: string;
+  sourceSectionPath?: string;
+  reviewStatus: string;
+  metadata?: Record<string, unknown>;
+};
+
 export class PrismaInternationalTestRepository implements IInternationalTestRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -588,18 +599,56 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
     });
     const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
     const hasRawContent = typeof data.rawContent === 'string' && data.rawContent.trim().length > 0;
-    const changeSummary = this.buildImportChangeSummary(latestVersion?.metadata, data.detectedFields);
-    const rawContentBlocks = hasRawContent
-      ? [
-          {
-            blockKey: 'source.raw',
-            blockType: 'RAW_SOURCE',
-            title: data.sourceFileName,
-            contentLength: data.rawContent?.length ?? 0,
-            reviewStatus: 'NEEDS_REVIEW'
-          }
-        ]
-      : [];
+    const unmappedSections = data.unmappedSections ?? [];
+    const reviewBlocks: InternationalTestContentBlockCreateInput[] = [];
+
+    if (hasRawContent && data.rawContent) {
+      reviewBlocks.push({
+        blockKey: 'source.raw',
+        blockType: 'RAW_SOURCE',
+        title: data.sourceFileName,
+        content: data.rawContent,
+        sourceSectionPath: '/',
+        reviewStatus: 'NEEDS_REVIEW',
+        metadata: {
+          preservedOriginalSource: true,
+          ...(data.sourceHash ? { sourceHash: data.sourceHash } : {}),
+          ...(data.sourceUri ? { sourceUri: data.sourceUri } : {})
+        }
+      });
+    }
+
+    for (const [index, section] of unmappedSections.entries()) {
+      if (!section.content || section.content.trim() === '') continue;
+      reviewBlocks.push({
+        blockKey: `unmapped.${index + 1}.${this.normalizeBlockKey(section.sectionKey)}`,
+        blockType: 'UNMAPPED_SOURCE_SECTION',
+        title: section.title ?? section.sectionKey,
+        locale: section.locale,
+        content: section.content,
+        sourceSectionPath: section.sourceSectionPath,
+        reviewStatus: 'NEEDS_REVIEW',
+        metadata: {
+          requiresMapping: true,
+          detectedFieldKeys: section.detectedFieldKeys ?? [],
+          ...(section.metadata ?? {})
+        }
+      });
+    }
+
+    const changeSummary = {
+      ...this.buildImportChangeSummary(latestVersion?.metadata, data.detectedFields),
+      unmappedSectionCount: reviewBlocks.filter((block) => block.blockType === 'UNMAPPED_SOURCE_SECTION').length,
+      unmappedSectionsRequireReview: reviewBlocks.some((block) => block.blockType === 'UNMAPPED_SOURCE_SECTION')
+    };
+    const rawContentBlocks = reviewBlocks.map((block) => ({
+      blockKey: block.blockKey,
+      blockType: block.blockType,
+      ...(block.title ? { title: block.title } : {}),
+      ...(block.sourceSectionPath ? { sourceSectionPath: block.sourceSectionPath } : {}),
+      contentLength: block.content.length,
+      reviewStatus: block.reviewStatus
+    }));
 
     const version = await prismaWithVersions.internationalTestVersion.create({
       data: {
@@ -617,25 +666,12 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
           ...(data.importedBy ? { importedBy: data.importedBy } : {}),
           detectedFields: data.detectedFields ?? {},
           detectedSections: data.detectedSections ?? [],
+          unmappedSections: unmappedSections.map((section) => section.sectionKey),
           ...(data.metadata ?? {})
         },
-        contentBlocks: hasRawContent
+        contentBlocks: reviewBlocks.length > 0
           ? {
-              create: [
-                {
-                  blockKey: 'source.raw',
-                  blockType: 'RAW_SOURCE',
-                  title: data.sourceFileName,
-                  content: data.rawContent,
-                  sourceSectionPath: '/',
-                  reviewStatus: 'NEEDS_REVIEW',
-                  metadata: {
-                    preservedOriginalSource: true,
-                    ...(data.sourceHash ? { sourceHash: data.sourceHash } : {}),
-                    ...(data.sourceUri ? { sourceUri: data.sourceUri } : {})
-                  }
-                }
-              ]
+              create: reviewBlocks
             }
           : undefined
       },
@@ -651,7 +687,8 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
       sourceHash: version.sourceHash ?? undefined,
       preservedRawContent: hasRawContent,
       reviewStatus: 'NEEDS_REVIEW',
-      createdContentBlockCount: Array.isArray(version.contentBlocks) ? version.contentBlocks.length : 0
+      createdContentBlockCount: Array.isArray(version.contentBlocks) ? version.contentBlocks.length : 0,
+      needsReviewSectionCount: reviewBlocks.filter((block) => block.blockType === 'UNMAPPED_SOURCE_SECTION').length
     };
   }
 
@@ -672,6 +709,15 @@ export class PrismaInternationalTestRepository implements IInternationalTestRepo
   }
 
   // --- Private Mapping Helpers ---
+
+  private normalizeBlockKey(value: string): string {
+    const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized || 'section';
+  }
 
   private buildImportChangeSummary(
     previousMetadata: unknown,

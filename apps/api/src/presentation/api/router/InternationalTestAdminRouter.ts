@@ -27,6 +27,15 @@ export class InternationalTestAdminRouter {
       importedBy: z.string().optional(),
       detectedFields: z.record(z.string(), z.unknown()).optional(),
       detectedSections: z.array(z.string()).optional(),
+      unmappedSections: z.array(z.object({
+        sectionKey: z.string().min(1),
+        title: z.string().optional(),
+        sourceSectionPath: z.string().optional(),
+        content: z.string(),
+        locale: z.string().optional(),
+        detectedFieldKeys: z.array(z.string()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional()
+      })).optional(),
       metadata: z.record(z.string(), z.unknown()).optional()
     });
 

@@ -199,6 +199,17 @@ export interface InternationalTestImportDraftRequestDto {
   importedBy?: string;
   detectedFields?: Record<string, unknown>;
   detectedSections?: string[];
+  unmappedSections?: InternationalTestImportedSectionDraftDto[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface InternationalTestImportedSectionDraftDto {
+  sectionKey: string;
+  title?: string;
+  sourceSectionPath?: string;
+  content: string;
+  locale?: string;
+  detectedFieldKeys?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -212,6 +223,7 @@ export interface InternationalTestImportDraftResultDto {
   preservedRawContent: boolean;
   reviewStatus: 'NEEDS_REVIEW';
   createdContentBlockCount: number;
+  needsReviewSectionCount: number;
 }
 
 export interface InternationalTestDeliveryModeProfileDto {
