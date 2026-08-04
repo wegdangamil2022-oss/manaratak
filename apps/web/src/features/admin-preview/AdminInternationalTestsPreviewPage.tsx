@@ -59,7 +59,7 @@ export function AdminInternationalTestsPreviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const filters: any = { page, pageSize: 20 };
+      const filters: any = { page, pageSize: 100 };
       if (statusFilter) filters.status = statusFilter;
 
       let res: any = { data: [] };

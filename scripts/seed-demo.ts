@@ -17,7 +17,7 @@ async function main() {
     services: 2,
     careerEmployers: 1,
     careerJobs: 1,
-    internationalTests: 4,
+    internationalTests: 49,
     studentTools: 4,
     certificateTemplates: 1,
   };
@@ -477,6 +477,87 @@ async function seedCareers() {
 }
 
 async function seedInternationalTests() {
+  const tests = [
+    ['test-ielts-academic', 'IELTS Academic', 'اختبار آيلتس الأكاديمي', 'IELTS Academic', 'British Council / IDP / Cambridge Assessment', 'LANGUAGE_PROFICIENCY'],
+    ['test-toefl-ibt', 'TOEFL iBT', 'اختبار التوفل عبر الإنترنت (TOEFL iBT)', 'TOEFL iBT Test', 'Educational Testing Service (ETS)', 'LANGUAGE_PROFICIENCY'],
+    ['test-duolingo-det', 'Duolingo English Test', 'اختبار دولينجو للغة الإنجليزية (DET)', 'Duolingo English Test', 'Duolingo, Inc.', 'LANGUAGE_PROFICIENCY'],
+    ['test-alevel-uk', 'A-Level (UK & International)', 'المستوى المتقدم البريطاني والدولي (A-Level)', 'Advanced Level Qualifications (A-Level)', 'Cambridge / Pearson Edexcel / OxfordAQA', 'UNDERGRAD_ADMISSION'],
+    ['test-abitur-de', 'Abitur (German Qualification)', 'الثانوية العامة الألمانية (Abitur)', 'German Allgemeine Hochschulreife (Abitur)', 'وزارات التعليم الألمانية (KMK / IQB)', 'UNDERGRAD_ADMISSION'],
+    ['test-act-us', 'ACT (Enhanced ACT)', 'اختبار القبول الجامعي الأمريكي (ACT)', 'ACT (American College Testing)', 'ACT Education Corp.', 'UNDERGRAD_ADMISSION'],
+    ['test-celpebras-br', 'Celpe-Bras (Portuguese Test)', 'اختبار اللغة البرتغالية البرازيلي (Celpe-Bras)', 'Celpe-Bras (Brazilian Portuguese Proficiency)', 'Inep / Ministério da Educação', 'LANGUAGE_PROFICIENCY'],
+    ['test-cils-it', 'CILS (Italian Certification)', 'شهادة الكفاءة في اللغة الإيطالية (CILS)', 'CILS (Italian Language Certification)', 'Università per Stranieri di Siena', 'LANGUAGE_PROFICIENCY'],
+    ['test-ap-us', 'AP Exams (Advanced Placement)', 'اختبارات التقدم المتقدم الجامعية (AP)', 'Advanced Placement (AP Exams)', 'College Board', 'ACADEMIC_PLACEMENT'],
+    ['test-cambridge-uk', 'Cambridge English Qualifications', 'مؤهلات كامبريدج للغة الإنجليزية (A2 - C2)', 'Cambridge English Qualifications', 'Cambridge University Press & Assessment', 'LANGUAGE_PROFICIENCY'],
+    ['test-clt-us', 'CLT (Classic Learning Test)', 'اختبار التعلم الكلاسيكي للقبول الجامعي (CLT)', 'Classic Learning Test (CLT)', 'Classic Learning Initiatives, LLC', 'UNDERGRAD_ADMISSION'],
+    ['test-cpa-us', 'U.S. CPA (Uniform CPA Exam)', 'ترخيص وامتحان المحاسب القانوني المعتمد (U.S. CPA)', 'Certified Public Accountant (Uniform CPA Examination)', 'AICPA / NASBA / State Boards / Prometric', 'PROFESSIONAL_LICENSING'],
+    ['test-csca-cn', 'CSCA (China Scholastic Competency Assessment)', 'اختبار الكفاءة الأكاديمية للقبول الجامعي في الصين (CSCA)', 'China Scholastic Competency Assessment (CSCA)', 'China Scholarship Council (CSC)', 'UNDERGRAD_ADMISSION'],
+    ['test-cuet-in', 'CUET (Common University Entrance Test)', 'اختبار القبول الجامعي المشترك في الهند (CUET)', 'Common University Entrance Test (CUET)', 'National Testing Agency (NTA)', 'UNDERGRAD_ADMISSION'],
+    ['test-csat-kr', 'CSAT / Suneung (College Scholastic Ability Test)', 'اختبار القدرة الدراسية الجامعية - سونونغ (CSAT / Suneung)', 'College Scholastic Ability Test (CSAT / Suneung)', 'Korea Institute for Curriculum and Evaluation (KICE)', 'UNDERGRAD_ADMISSION'],
+    ['test-dele-es', 'DELE (Spanish Language Diploma)', 'دبلومات اللغة الإسبانية الرسمية (DELE)', 'Diplomas de Espanol como Lengua Extranjera (DELE)', 'Instituto Cervantes', 'LANGUAGE_PROFICIENCY'],
+    ['test-delf-dalf-fr', 'DELF / DALF (French Language Diplomas)', 'دبلومات اللغة الفرنسية الرسمية (DELF / DALF)', 'DELF / DALF French Language Diplomas', 'France Education international (FEI)', 'LANGUAGE_PROFICIENCY'],
+    ['test-dat-us', 'DAT (US Dental Admission Test)', 'اختبار القبول في كليات طب الأسنان الأمريكي (DAT)', 'Dental Admission Test (DAT)', 'American Dental Association (ADA)', 'PROFESSIONAL_LICENSING'],
+    ['test-gamsat-uk-au', 'GAMSAT (Graduate Medical School Admissions Test)', 'اختبار القبول لكليات الطب للدراسات العليا (GAMSAT)', 'Graduate Medical School Admissions Test (GAMSAT)', 'Australian Council for Educational Research (ACER)', 'GRAD_ADMISSION'],
+    ['test-gmat-focus', 'GMAT Exam (Focus Edition)', 'اختبار القبول للدراسات العليا وإدارة الأعمال (GMAT)', 'Graduate Management Admission Test (GMAT)', 'Graduate Management Admission Council (GMAC)', 'GRAD_ADMISSION'],
+    ['test-gre-shorter', 'GRE General Test (Shorter Version)', 'اختبار القبول للدراسات العليا (GRE)', 'GRE General Test (Shorter Version)', 'Educational Testing Service (ETS)', 'GRAD_ADMISSION'],
+    ['test-hsk-chinese', 'HSK (Hanyu Shuiping Kaoshi)', 'اختبار كفاءة اللغة الصينية (HSK)', 'Hanyu Shuiping Kaoshi (HSK)', 'Center for Language Education and Cooperation (CLEC)', 'LANGUAGE_PROFICIENCY'],
+    ['test-eju-japanese', 'EJU (Japanese University Admission for International Students)', 'اختبار القبول الجامعي الياباني للطلاب الدوليين (EJU)', 'Examination for Japanese University Admission for International Students (EJU)', 'Japan Student Services Organization (JASSO)', 'UNDERGRAD_ADMISSION'],
+    ['test-itep-academic', 'iTEP Academic', 'اختبار iTEP الأكاديمي للغة الإنجليزية', 'iTEP Academic English Proficiency', 'Boston Educational Services (BES)', 'LANGUAGE_PROFICIENCY'],
+    ['test-jlpt-exam', 'JLPT (Japanese Language Proficiency Test)', 'اختبار كفاءة اللغة اليابانية (JLPT)', 'Japanese Language Proficiency Test', 'Japan Foundation & JEES', 'LANGUAGE_PROFICIENCY'],
+    ['test-languagecert-academic', 'LANGUAGECERT Academic', 'اختبار لانجويج سيرت الأكاديمي (LANGUAGECERT Academic)', 'LANGUAGECERT Academic English', 'PeopleCert / LANGUAGECERT', 'LANGUAGE_PROFICIENCY'],
+    ['test-linguaskill-cambridge', 'Linguaskill (by Cambridge)', 'اختبار لينجواسكيل من كامبريدج (Linguaskill)', 'Linguaskill (Cambridge Assessment English)', 'Cambridge University Press & Assessment', 'LANGUAGE_PROFICIENCY'],
+    ['test-imat-italy', 'IMAT (International Medical Admissions Test)', 'اختبار القبول لكليات الطب الإيطالية (IMAT)', 'International Medical Admissions Test (IMAT)', 'Cambridge Assessment Admissions Testing / MUR Italy', 'UNDERGRAD_ADMISSION'],
+    ['test-met-michigan', 'Michigan English Test (MET)', 'اختبار ميشيغان للغة الإنجليزية (MET)', 'Michigan English Test (MET)', 'Michigan Language Assessment', 'LANGUAGE_PROFICIENCY'],
+    ['test-staatsexamen-nt2', 'Staatsexamen Nt2 (Dutch State Exam)', 'الامتحان الحكومي للهولندية كلغة ثانية (Staatsexamen Nt2)', 'Staatsexamen Nederlands als tweede taal', 'CvTE & DUO', 'LANGUAGE_PROFICIENCY'],
+    ['test-oxford-ote', 'Oxford Test of English (OTE)', 'اختبار أكسفورد للغة الإنجليزية (Oxford Test of English)', 'Oxford Test of English (OTE)', 'Oxford University Press', 'LANGUAGE_PROFICIENCY'],
+    ['test-matura-europe', 'Matura (Secondary School & University Admission)', 'عائلة شهادات وامتحانات الثانوية والقبول الجامعي (Matura)', 'Matura / Maturita (European Family)', 'National Ministries of Education', 'UNDERGRAD_ADMISSION'],
+    ['test-mcat-aamc', 'MCAT (Medical College Admission Test)', 'اختبار القبول في كليات الطب (MCAT)', 'Medical College Admission Test (MCAT)', 'AAMC', 'GRAD_ADMISSION'],
+    ['test-plab', 'PLAB (Professional and Linguistic Assessments Board)', 'اختبار تقييم المهنيين واللغويات (PLAB)', 'Professional and Linguistic Assessments Board', 'GMC', 'PROFESSIONAL_LICENSING'],
+    ['test-pmp', 'PMP (Project Management Professional)', 'شهادة محترف إدارة المشاريع (PMP)', 'Project Management Professional', 'PMI', 'PROFESSIONAL_LICENSING'],
+    ['test-polish-state', 'Polish State Certificate Exam (Certyfikat Polski)', 'امتحان شهادة الدولة في اللغة البولندية', 'State Certificate Examinations in Polish as a Foreign Language', 'State Commission (Poland)', 'LANGUAGE_PROFICIENCY'],
+    ['test-pte', 'PTE Academic (Pearson Test of English)', 'اختبار بيرسون الأكاديمي للغة الإنجليزية', 'Pearson Test of English Academic', 'Pearson', 'LANGUAGE_PROFICIENCY'],
+    ['test-sat', 'SAT (Scholastic Assessment Test)', 'اختبار القبول الجامعي (SAT)', 'Scholastic Assessment Test', 'College Board', 'UNDERGRAD_ADMISSION'],
+    ['test-testdaf', 'TestDaF (Test Deutsch als Fremdsprache)', 'اختبار الألمانية كلغة أجنبية (TestDaF)', 'Test Deutsch als Fremdsprache', 'g.a.s.t.', 'LANGUAGE_PROFICIENCY'],
+    ['test-tomer', 'TOMER (Turkish Proficiency Test)', 'اختبار كفاءة اللغة التركية (TOMER)', 'TOMER Turkish Proficiency Test', 'Ankara University', 'LANGUAGE_PROFICIENCY'],
+    ['test-topik', 'TOPIK (Test of Proficiency in Korean)', 'اختبار الكفاءة في اللغة الكورية (TOPIK)', 'Test of Proficiency in Korean', 'NIIED', 'LANGUAGE_PROFICIENCY'],
+    ['test-toeic', 'TOEIC (Test of English for International Communication)', 'اختبار اللغة الإنجليزية للتواصل الدولي (TOEIC)', 'Test of English for International Communication', 'ETS', 'LANGUAGE_PROFICIENCY'],
+    ['test-ukbi', 'UKBI (Indonesian Language Proficiency Test)', 'اختبار الكفاءة في اللغة الإندونيسية (UKBI)', 'Indonesian Language Proficiency Test (UKBI)', 'Kemendikdasmen', 'LANGUAGE_PROFICIENCY'],
+    ['test-usmle', 'USMLE (United States Medical Licensing Examination)', 'امتحان الترخيص الطبي الأمريكي (USMLE)', 'United States Medical Licensing Examination (USMLE)', 'FSMB & NBME', 'PROFESSIONAL_LICENSING'],
+    ['test-yks', 'YKS (Higher Education Institutions Examination)', 'اختبار مؤسسات التعليم العالي التركية (YKS)', 'YKS (Higher Education Institutions Exam)', 'OSYM', 'UNDERGRAD_ADMISSION'],
+    ['test-torfl', 'TORFL / TRKI (Test of Russian as a Foreign Language)', 'اختبار الكفاءة في اللغة الروسية (TORFL)', 'Test of Russian as a Foreign Language (TORFL)', 'Russian Ministry of Education', 'LANGUAGE_PROFICIENCY'],
+    ['test-ucat', 'UCAT (University Clinical Aptitude Test)', 'اختبار الكفاءة السريرية الجامعية (UCAT)', 'University Clinical Aptitude Test', 'UCAT Consortium', 'UNDERGRAD_ADMISSION'],
+    ['test-yos', 'YOS / TR-YOS (Turkish Universities Student Admission)', 'اختبار الطلاب الأجانب في تركيا (YOS)', 'Turkish Universities Student Admission Exam (TR-YOS)', 'OSYM', 'UNDERGRAD_ADMISSION'],
+    ['test-bmat', 'BMAT (BioMedical Admissions Test)', 'اختبار القبول في الطب الحيوي (BMAT)', 'BioMedical Admissions Test (BMAT)', 'CAAT', 'UNDERGRAD_ADMISSION']
+  ] as const;
+
+  await prisma.internationalTest.deleteMany({});
+  await prisma.internationalTest.createMany({
+    data: tests.map(([publicId, displayName, localizedNameAr, localizedNameEn, providerName, testCategory]) => {
+      const slug = publicId.replace(/^test-/, '');
+      return {
+        publicId,
+        slug,
+        canonicalName: localizedNameEn,
+        canonicalDedupKey: `${slug}|${providerName}`.toLowerCase(),
+        displayName,
+        localizedNameAr,
+        localizedNameEn,
+        abbreviation: displayName.split(/[ (]/)[0],
+        testCategory,
+        providerName,
+        isPubliclyVisible: true,
+        isSourceVerified: false,
+        status: 'PUBLISHED',
+        completenessStatus: 'NEEDS_REVIEW',
+        optionalFields: {
+          phase09SeedSource: 'frontend-preview-baseline',
+          sourceOfTruthStatus: 'database-baseline',
+          sourceMarkdownModule: `${slug.split('-')[0]}-markdown-content.ts`
+        }
+      };
+    })
+  });
+  return;
+
   // Clear any existing to ensure clean slate for unique/relation constraints
   await prisma.internationalTest.deleteMany({
     where: { slug: { in: ['ielts', 'ielts-academic', 'toefl-ibt', 'act', 'cpa'] } }
