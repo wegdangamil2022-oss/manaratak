@@ -1088,88 +1088,134 @@ export function AdminDomainImportCenterPage() {
       if (keyLower === 'international-tests' || keyLower === 'tests' || targetDataType === 'TESTS') {
         const combinedStr = ((testImportFile?.name || '') + ' ' + (testImportText || '') + ' ' + (pastedPayload || '')).toLowerCase();
         
-        let tName = 'IELTS Academic';
-        let dispName = 'IELTS Academic — اختبار الآيلتس الأكاديمي الدولي';
-        let nameAr = 'اختبار الآيلتس (IELTS) — ملف البيانات المعتمد الشامل 2026';
-        let nameEn = 'IELTS Official Master Data Reference 2026';
-        let provName = selectedProvider?.name || 'British Council / IDP / Cambridge Assessment';
-        let abbrev = 'IELTS';
-        let cat = 'Language / Academic Proficiency';
-        let scoreR = '0.0 – 9.0 Band Scale';
-        let feeVal = 'USD $265 - $215';
+        type TestImportProfile = {
+          tName: string;
+          dispName: string;
+          nameAr: string;
+          nameEn: string;
+          provName: string;
+          abbrev: string;
+          cat: string;
+          scoreR: string;
+          scoreBands: string[];
+          feeVal: string;
+          scoreMinimum: number;
+          scoreMaximum: number;
+          scoreIncrement: number;
+          sections: Array<{
+            sectionName: string;
+            sectionType: string;
+            durationMinutes?: number;
+            questionCount?: number;
+            scoreMinimum?: number;
+            scoreMaximum?: number;
+            order: number;
+          }>;
+        };
+
+        let importProfile: TestImportProfile = {
+          tName: 'IELTS Academic',
+          dispName: 'IELTS Academic - International English Language Testing System',
+          nameAr: 'IELTS Academic',
+          nameEn: 'IELTS Academic Official Master Data Reference 2026',
+          provName: selectedProvider?.name || 'British Council / IDP / Cambridge Assessment',
+          abbrev: 'IELTS',
+          cat: 'LANGUAGE_PROFICIENCY',
+          scoreR: '0.0 - 9.0 Band Scale',
+          scoreBands: ['0.0 - 9.0 Band Scale'],
+          feeVal: 'USD $265 - $215',
+          scoreMinimum: 0,
+          scoreMaximum: 9,
+          scoreIncrement: 0.5,
+          sections: [
+            { sectionName: 'Listening', sectionType: 'LANGUAGE_SKILL', durationMinutes: 30, questionCount: 40, scoreMinimum: 0, scoreMaximum: 9, order: 1 },
+            { sectionName: 'Reading', sectionType: 'LANGUAGE_SKILL', durationMinutes: 60, questionCount: 40, scoreMinimum: 0, scoreMaximum: 9, order: 2 },
+            { sectionName: 'Writing', sectionType: 'LANGUAGE_SKILL', durationMinutes: 60, questionCount: 2, scoreMinimum: 0, scoreMaximum: 9, order: 3 },
+            { sectionName: 'Speaking', sectionType: 'LANGUAGE_SKILL', durationMinutes: 14, questionCount: 3, scoreMinimum: 0, scoreMaximum: 9, order: 4 }
+          ]
+        };
 
         if (combinedStr.includes('toefl')) {
-          tName = 'TOEFL iBT';
-          dispName = 'TOEFL iBT — اختبار التوفل الدولي الرقمي الشامل';
-          nameAr = 'اختبار التوفل (TOEFL iBT) — ملف البيانات الرقمية المعتمد 2026';
-          nameEn = 'TOEFL iBT Official Master Data Reference 2026';
-          provName = 'ETS (Educational Testing Service)';
-          abbrev = 'TOEFL';
-          cat = 'Language / Academic Proficiency';
-          scoreR = '0 – 120 Score';
-          feeVal = 'USD $245 - $190';
+          importProfile = { ...importProfile, tName: 'TOEFL iBT', dispName: 'TOEFL iBT - Internet-Based Test', nameAr: 'TOEFL iBT', nameEn: 'TOEFL iBT Official Master Data Reference 2026', provName: 'ETS (Educational Testing Service)', abbrev: 'TOEFL', scoreR: '0 - 120 Score', scoreBands: ['0 - 120 Score'], feeVal: 'USD $245 - $190', scoreMaximum: 120, scoreIncrement: 1 };
         } else if (combinedStr.includes('sat')) {
-          tName = 'SAT (Scholastic Assessment Test)';
-          dispName = 'SAT — اختبار القبول الجامعي';
-          nameAr = 'اختبار القبول الجامعي (SAT)';
-          nameEn = 'Scholastic Assessment Test';
-          provName = 'College Board';
-          abbrev = 'SAT';
-          cat = 'Admission / Undergraduate';
-          scoreR = '400 - 1600';
-          feeVal = 'USD $111+';
+          importProfile = {
+            ...importProfile,
+            tName: 'SAT',
+            dispName: 'SAT - Scholastic Assessment Test',
+            nameAr: 'SAT',
+            nameEn: 'Scholastic Assessment Test',
+            provName: 'College Board',
+            abbrev: 'SAT',
+            cat: 'UNDERGRAD_ADMISSION',
+            scoreR: '400 - 1600',
+            scoreBands: ['400 - 1600'],
+            feeVal: 'USD $111+',
+            scoreMinimum: 400,
+            scoreMaximum: 1600,
+            scoreIncrement: 10,
+            sections: [
+              { sectionName: 'Reading and Writing', sectionType: 'ACADEMIC_SUBJECT', durationMinutes: 64, scoreMinimum: 200, scoreMaximum: 800, order: 1 },
+              { sectionName: 'Math', sectionType: 'ACADEMIC_SUBJECT', durationMinutes: 70, scoreMinimum: 200, scoreMaximum: 800, order: 2 }
+            ]
+          };
         } else if (combinedStr.includes('gre')) {
-          tName = 'GRE General Test';
-          dispName = 'GRE General Test — اختبار الجي آر إي المتقدم للدراسات العليا';
-          nameAr = 'اختبار الجي آر إي (GRE) — ملف بيانات الدراسات العليا المعتمد 2026';
-          nameEn = 'GRE General Test Official Master Data Reference 2026';
-          provName = 'ETS (Educational Testing Service)';
-          abbrev = 'GRE';
-          cat = 'Graduate Admission / Professional';
-          scoreR = '260 – 340 Score';
-          feeVal = 'USD $220';
+          importProfile = { ...importProfile, tName: 'GRE General Test', dispName: 'GRE General Test', nameAr: 'GRE General Test', nameEn: 'GRE General Test Official Master Data Reference 2026', provName: 'ETS (Educational Testing Service)', abbrev: 'GRE', cat: 'GRAD_ADMISSION', scoreR: '260 - 340 Score', scoreBands: ['260 - 340 Score'], feeVal: 'USD $220', scoreMinimum: 260, scoreMaximum: 340, scoreIncrement: 1 };
         } else if (combinedStr.includes('duolingo') || combinedStr.includes('det')) {
-          tName = 'Duolingo English Test';
-          dispName = 'Duolingo English Test — اختبار دوولينجو الدولي من المنزل';
-          nameAr = 'اختبار دوولينجو (DET) — ملف البيانات الرقمية المعتمد 2026';
-          nameEn = 'Duolingo English Test Official Master Data Reference 2026';
-          provName = 'Duolingo Inc.';
-          abbrev = 'DET';
-          cat = 'Language / Adaptive Test';
-          scoreR = '10 – 160 Score Scale';
-          feeVal = 'USD $59';
+          importProfile = { ...importProfile, tName: 'Duolingo English Test', dispName: 'Duolingo English Test', nameAr: 'Duolingo English Test', nameEn: 'Duolingo English Test Official Master Data Reference 2026', provName: 'Duolingo Inc.', abbrev: 'DET', scoreR: '10 - 160 Score Scale', scoreBands: ['10 - 160 Score Scale'], feeVal: 'USD $59', scoreMinimum: 10, scoreMaximum: 160, scoreIncrement: 5 };
+        } else if (combinedStr.includes('cuet')) {
+          importProfile = {
+            ...importProfile,
+            tName: 'CUET',
+            dispName: 'CUET - Common University Entrance Test',
+            nameAr: 'CUET',
+            nameEn: 'Common University Entrance Test',
+            provName: 'National Testing Agency (NTA)',
+            abbrev: 'CUET',
+            cat: 'UNDERGRAD_ADMISSION',
+            scoreR: '0 - 250 per subject',
+            scoreBands: ['0 - 250 per subject', 'Normalized score by subject/session'],
+            feeVal: 'INR 1000+',
+            scoreMinimum: 0,
+            scoreMaximum: 250,
+            scoreIncrement: 1,
+            sections: [
+              { sectionName: 'Language Test', sectionType: 'LANGUAGE_SKILL', durationMinutes: 45, scoreMinimum: 0, scoreMaximum: 250, order: 1 },
+              { sectionName: 'Domain Subjects', sectionType: 'ACADEMIC_SUBJECT', durationMinutes: 60, scoreMinimum: 0, scoreMaximum: 250, order: 2 },
+              { sectionName: 'General Test', sectionType: 'GENERAL', durationMinutes: 60, scoreMinimum: 0, scoreMaximum: 250, order: 3 }
+            ]
+          };
         }
 
+        const officialSourceUrl = officialUrlInput || selectedProvider?.officialUrl || 'https://www.ielts.org';
+        const importedSourceText = testImportText || pastedPayload || '';
+        const feeAmount = Number.parseFloat(importProfile.feeVal.replace(/[^0-9.]/g, ''));
+        const importFileName = testImportFile?.name || importProfile.abbrev + '_manual_update.md';
+        const importFileSize = testImportFile ? (testImportFile.size / 1024).toFixed(1) + ' KB' : '1.0 KB';
+
         testPayloadObj = {
-          testName: tName,
-          displayName: dispName,
-          canonicalName: tName,
-          localizedNameAr: nameAr,
-          localizedNameEn: nameEn,
-          abbreviation: abbrev,
-          providerName: provName,
-          testCategory: cat,
-          officialSourceUrl: officialUrlInput || 'https://www.ielts.org',
-          description: testImportText || 'ملف بيانات ومواصفات الاختبار المرفق المعتمد.',
-          sections: [
-            { sectionName: 'Listening', durationMinutes: 30, questionCount: 40, scoreMinimum: 0, scoreMaximum: 9, order: 1 },
-            { sectionName: 'Reading', durationMinutes: 60, questionCount: 40, scoreMinimum: 0, scoreMaximum: 9, order: 2 },
-            { sectionName: 'Writing', durationMinutes: 60, questionCount: 2, scoreMinimum: 0, scoreMaximum: 9, order: 3 },
-            { sectionName: 'Speaking', durationMinutes: 14, questionCount: 3, scoreMinimum: 0, scoreMaximum: 9, order: 4 }
-          ],
+          testName: importProfile.tName,
+          displayName: importProfile.dispName,
+          canonicalName: importProfile.tName,
+          localizedNameAr: importProfile.nameAr,
+          localizedNameEn: importProfile.nameEn,
+          abbreviation: importProfile.abbrev,
+          providerName: importProfile.provName,
+          testCategory: importProfile.cat,
+          officialSourceUrl,
+          officialRegistrationUrl: officialSourceUrl,
+          description: importedSourceText || 'Imported international test specification document.',
+          sections: importProfile.sections,
           scoreScale: {
-            overallMinimum: 0,
-            overallMaximum: 9,
-            scoreIncrement: 0.5,
+            overallMinimum: importProfile.scoreMinimum,
+            overallMaximum: importProfile.scoreMaximum,
+            scoreIncrement: importProfile.scoreIncrement,
             resultValidityDurationMonths: 24,
-            bandsOrLevels: scoreR
+            bandsOrLevels: importProfile.scoreBands
           },
-          optionalFields: {
-            attachedFileName: testImportFile?.name || 'TS_2026_Complete_Data_AR_Final.md',
-            fileSize: testImportFile ? `${(testImportFile.size / 1024).toFixed(1)} KB` : '55.7 KB',
-            importNotes: testImportText || 'تم استيراد مواصفات تفاصيل الاختبار بنجاح.',
-            fee: feeVal
-          }
+          fees: [{ feeType: 'REGISTRATION', amount: Number.isFinite(feeAmount) ? feeAmount : undefined, currencyCode: importProfile.feeVal.includes('INR') ? 'INR' : 'USD', hasRegionalVariation: true }],
+          officialLinks: [{ linkType: 'SOURCE', url: officialSourceUrl, description: 'Official source URL used by the import flow', sourceName: importProfile.provName, lastVerifiedAt: new Date().toISOString(), linkHealthStatus: 'NEEDS_REVIEW', sourceTrustLevel: 'AUTHORITATIVE' }],
+          importEvidence: { originalImportedName: importFileName, normalizedCanonicalName: importProfile.tName, sourceUrl: officialSourceUrl, retrievedAt: new Date().toISOString(), evidenceSnippet: importedSourceText.slice(0, 500), confidenceScore: testImportFile ? 0.85 : 0.7, sourceTrustLevel: 'AUTHORITATIVE', duplicateStatus: 'NEEDS_REVIEW' },
+          optionalFields: { attachedFileName: importFileName, fileSize: importFileSize, importNotes: importedSourceText || 'Imported test details from admin import center.', fee: importProfile.feeVal, originalSourceContent: importedSourceText }
         };
 
         dataTextContent = JSON.stringify(testPayloadObj, null, 2);
@@ -1234,7 +1280,9 @@ export function AdminDomainImportCenterPage() {
             family: testPayloadObj.testCategory,
             sourceUrl: testPayloadObj.officialSourceUrl,
             version: 2,
-            scoreRange: testPayloadObj.scoreScale.bandsOrLevels,
+            scoreRange: Array.isArray(testPayloadObj.scoreScale.bandsOrLevels)
+              ? testPayloadObj.scoreScale.bandsOrLevels.join(', ')
+              : String(testPayloadObj.scoreScale.bandsOrLevels || ''),
             validity: `${testPayloadObj.scoreScale.resultValidityDurationMonths} شهر`,
             status: 'NEEDS_REVIEW',
             checkStatus: 'needs_review',
