@@ -110,6 +110,13 @@ type InternationalTestSourceCard = {
   changeSummary: string[];
 };
 
+const SAMPLE_TEST_IMPORT_FILE = {
+  name: 'CUET_2026_Sample_Update_AR.md',
+  path: '/import-samples/CUET_2026_Sample_Update_AR.md',
+  sourceUrl: 'https://cuet.nta.nic.in',
+  providerName: 'National Testing Agency (NTA)'
+};
+
 const INTERNATIONAL_TEST_SOURCE_CARDS: InternationalTestSourceCard[] = ([
   ['test-ielts-academic', 'IELTS Academic', 'British Council / IDP / Cambridge', 'اختبار لغة', 'IELTS_2026_Complete_Data_AR_Final.md', '55.7 KB', 'https://ielts.org/take-a-test/test-types/ielts-academic', '0.0 - 9.0', 'سنتان'],
   ['test-toefl-ibt', 'TOEFL iBT', 'Educational Testing Service (ETS)', 'اختبار لغة', 'TOEFL_iBT_2026_Complete_Data_AR.md', '48.2 KB', 'https://www.ets.org/toefl', '0 - 120', 'سنتان'],
@@ -1023,6 +1030,34 @@ export function AdminDomainImportCenterPage() {
     setActiveWizard(true);
   };
 
+  const handleLoadSampleTestFile = async () => {
+    try {
+      const response = await fetch(SAMPLE_TEST_IMPORT_FILE.path);
+      const sampleText = await response.text();
+      const sampleFile = new File([sampleText], SAMPLE_TEST_IMPORT_FILE.name, { type: 'text/markdown' });
+
+      setSelectedProvider({
+        id: 'source-test-cuet-in-sample',
+        name: SAMPLE_TEST_IMPORT_FILE.providerName,
+        sourceType: 'manual_source',
+        trustScore: 95,
+        officialUrl: SAMPLE_TEST_IMPORT_FILE.sourceUrl,
+        lastCheck: new Date().toISOString(),
+        importedCount: 1,
+        failedCount: 0,
+        incompleteCount: 1,
+        transferredCount: 0,
+        status: 'active'
+      });
+      setOfficialUrlInput(SAMPLE_TEST_IMPORT_FILE.sourceUrl);
+      setTestImportFile(sampleFile);
+      setTestImportText(sampleText);
+      setPastedPayload(sampleText);
+    } catch (error) {
+      console.warn('Failed to load sample test import file:', error);
+    }
+  };
+
   // Run Batch Execution (Step 6)
   const handleRunBatchExecution = async () => {
     setIsExecuting(true);
@@ -1750,6 +1785,14 @@ export function AdminDomainImportCenterPage() {
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={handleLoadSampleTestFile}
+                      className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-extrabold cursor-pointer transition-colors inline-flex items-center gap-2 shadow-xs"
+                    >
+                      <FileText className="w-4 h-4 text-emerald-700" />
+                      <span>{isRTL ? 'استخدام ملف تجربة CUET' : 'Use CUET sample file'}</span>
+                    </button>
 
                     {testImportFile ? (
                       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200">
