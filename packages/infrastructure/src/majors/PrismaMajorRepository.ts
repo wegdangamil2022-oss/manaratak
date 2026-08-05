@@ -1,12 +1,15 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
   IMajorRepository,
+  MajorAliasDto,
+  MajorClassificationMappingDto,
   MajorContentSectionDto,
   MajorDto,
   MajorFilters,
   MajorLevel,
   MajorLevelProfileDto,
   MajorLifecycleStatus,
+  MajorRelationshipDto,
   MajorSourceDto,
   MajorStatus,
   MajorVersionDto,
@@ -282,6 +285,135 @@ export class PrismaMajorRepository implements IMajorRepository {
     });
 
     return records.map((record) => this.mapContentSectionToDto(record));
+  }
+
+  async createAliases(data: Array<Omit<MajorAliasDto, 'id'>>): Promise<{ count: number }> {
+    if (data.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.majorAlias.createMany({
+      data: data.map((alias) => ({
+        majorId: alias.majorId ?? '',
+        locale: alias.locale,
+        alias: alias.alias,
+        normalizedAlias: alias.normalizedAlias ?? alias.alias.trim().toLowerCase(),
+        aliasType: alias.aliasType ?? 'ALIAS',
+        sourceId: alias.sourceId,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { count: result.count };
+  }
+
+  async listAliases(majorId: string): Promise<MajorAliasDto[]> {
+    const records = await this.prisma.majorAlias.findMany({
+      where: { majorId },
+      orderBy: [{ aliasType: 'asc' }, { locale: 'asc' }, { alias: 'asc' }],
+    });
+
+    return records.map((record) => ({
+      ...record,
+      locale: record.locale ?? undefined,
+      aliasType: record.aliasType as MajorAliasDto['aliasType'],
+      sourceId: record.sourceId ?? undefined,
+    }));
+  }
+
+  async createRelationships(data: Array<Omit<MajorRelationshipDto, 'id'>>): Promise<{ count: number }> {
+    if (data.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.majorRelationship.createMany({
+      data: data.map((relationship) => ({
+        sourceMajorId: relationship.sourceMajorId,
+        targetMajorId: relationship.targetMajorId,
+        sourceProfileId: relationship.sourceProfileId,
+        targetProfileId: relationship.targetProfileId,
+        relationshipType: relationship.relationshipType,
+        confidence: relationship.confidence,
+        notes: relationship.notes,
+        metadata: relationship.metadata as Prisma.InputJsonObject | undefined,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { count: result.count };
+  }
+
+  async listRelationships(majorId: string): Promise<MajorRelationshipDto[]> {
+    const records = await this.prisma.majorRelationship.findMany({
+      where: {
+        OR: [
+          { sourceMajorId: majorId },
+          { targetMajorId: majorId },
+          { sourceProfile: { majorId } },
+          { targetProfile: { majorId } },
+        ],
+      },
+      orderBy: [{ relationshipType: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return records.map((record) => ({
+      ...record,
+      sourceMajorId: record.sourceMajorId ?? undefined,
+      targetMajorId: record.targetMajorId ?? undefined,
+      sourceProfileId: record.sourceProfileId ?? undefined,
+      targetProfileId: record.targetProfileId ?? undefined,
+      relationshipType: record.relationshipType as MajorRelationshipDto['relationshipType'],
+      confidence: record.confidence ?? undefined,
+      notes: record.notes ?? undefined,
+      metadata: this.asRecord(record.metadata),
+    }));
+  }
+
+  async createClassificationMappings(data: Array<Omit<MajorClassificationMappingDto, 'id'>>): Promise<{ count: number }> {
+    if (data.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.majorClassificationMapping.createMany({
+      data: data.map((mapping) => ({
+        majorId: mapping.majorId,
+        profileId: mapping.profileId,
+        taxonomyNodeId: mapping.taxonomyNodeId,
+        relationshipType: mapping.relationshipType,
+        standardType: mapping.standardType,
+        standardCode: mapping.standardCode,
+        confidence: mapping.confidence,
+        notes: mapping.notes,
+        metadata: mapping.metadata as Prisma.InputJsonObject | undefined,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { count: result.count };
+  }
+
+  async listClassificationMappings(majorId: string): Promise<MajorClassificationMappingDto[]> {
+    const records = await this.prisma.majorClassificationMapping.findMany({
+      where: {
+        OR: [
+          { majorId },
+          { profile: { majorId } },
+        ],
+      },
+      orderBy: [{ relationshipType: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return records.map((record) => ({
+      ...record,
+      majorId: record.majorId ?? undefined,
+      profileId: record.profileId ?? undefined,
+      relationshipType: record.relationshipType as MajorClassificationMappingDto['relationshipType'],
+      standardType: record.standardType ?? undefined,
+      standardCode: record.standardCode ?? undefined,
+      confidence: record.confidence ?? undefined,
+      notes: record.notes ?? undefined,
+      metadata: this.asRecord(record.metadata),
+    }));
   }
 
   async createSource(data: Omit<MajorSourceDto, 'id' | 'createdAt' | 'updatedAt'>): Promise<MajorSourceDto> {

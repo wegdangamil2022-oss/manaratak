@@ -240,6 +240,12 @@ export interface IMajorRepository {
   listLevelProfiles?(majorId: string): Promise<MajorLevelProfileDto[]>;
   createContentSections?(data: Array<Omit<MajorContentSectionDto, 'id'>>): Promise<{ count: number }>;
   listContentSections?(majorId: string): Promise<MajorContentSectionDto[]>;
+  createAliases?(data: Array<Omit<MajorAliasDto, 'id'>>): Promise<{ count: number }>;
+  listAliases?(majorId: string): Promise<MajorAliasDto[]>;
+  createRelationships?(data: Array<Omit<MajorRelationshipDto, 'id'>>): Promise<{ count: number }>;
+  listRelationships?(majorId: string): Promise<MajorRelationshipDto[]>;
+  createClassificationMappings?(data: Array<Omit<MajorClassificationMappingDto, 'id'>>): Promise<{ count: number }>;
+  listClassificationMappings?(majorId: string): Promise<MajorClassificationMappingDto[]>;
   createSource?(data: Omit<MajorSourceDto, 'id' | 'createdAt' | 'updatedAt'>): Promise<MajorSourceDto>;
   listSources?(majorId: string): Promise<MajorSourceDto[]>;
 }

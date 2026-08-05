@@ -26,6 +26,12 @@ describe('MajorImportPromotionUseCase', () => {
     listLevelProfiles: vi.fn().mockResolvedValue([]),
     createContentSections: vi.fn().mockResolvedValue({ count: 0 }),
     listContentSections: vi.fn().mockResolvedValue([]),
+    createAliases: vi.fn().mockResolvedValue({ count: 0 }),
+    listAliases: vi.fn().mockResolvedValue([]),
+    createRelationships: vi.fn().mockResolvedValue({ count: 0 }),
+    listRelationships: vi.fn().mockResolvedValue([]),
+    createClassificationMappings: vi.fn().mockResolvedValue({ count: 0 }),
+    listClassificationMappings: vi.fn().mockResolvedValue([]),
     listSources: vi.fn().mockResolvedValue([]),
     listVersions: vi.fn().mockResolvedValue([]),
   });
@@ -90,6 +96,53 @@ describe('MajorImportPromotionUseCase', () => {
         addedFields: expect.arrayContaining(['canonicalMajorName'])
       })
     }));
+    expect(repo.createAliases).toHaveBeenCalledWith([
+      expect.objectContaining({
+        majorId: 'major-1',
+        alias: 'Computer Science',
+        normalizedAlias: 'computer science',
+      }),
+    ]);
+  });
+
+  it('stores aliases and phase 8 classification mappings from import payloads', async () => {
+    const repo = createMockRepo();
+    const useCase = new MajorImportPromotionUseCase(repo);
+
+    await useCase.promote(createRecord(ImportRecordStatus.VALID, {
+      canonicalMajorName: 'Computer Science',
+      degreeLevel: 'Bachelor',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_CATALOG',
+      academicFieldOrDiscipline: 'Computing',
+      academicFieldId: 'taxonomy-computing',
+      disciplineId: 'taxonomy-software',
+      classificationCode: 'MJR-0100',
+      officialSourceUrl: 'https://manaratak.test/majors/computer-science',
+      localizedNames: { ar: 'علوم الحاسب', en: 'Computer Science' },
+      aliases: ['CS'],
+      synonyms: ['Computing Science'],
+    }));
+
+    expect(repo.createAliases).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ alias: 'Computer Science', aliasType: 'ALIAS' }),
+      expect.objectContaining({ alias: 'علوم الحاسب', locale: 'ar', aliasType: 'TRANSLATION' }),
+      expect.objectContaining({ alias: 'CS', aliasType: 'ALIAS' }),
+      expect.objectContaining({ alias: 'Computing Science', aliasType: 'SYNONYM' }),
+    ]));
+    expect(repo.createClassificationMappings).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        majorId: 'major-1',
+        profileId: 'profile-1',
+        taxonomyNodeId: 'taxonomy-computing',
+        relationshipType: 'PRIMARY',
+      }),
+      expect.objectContaining({
+        majorId: 'major-1',
+        profileId: 'profile-1',
+        taxonomyNodeId: 'taxonomy-software',
+        relationshipType: 'SECONDARY',
+      }),
+    ]));
   });
 
   it('creates a review-ready major when trusted source fields are missing', async () => {
@@ -144,6 +197,39 @@ describe('MajorImportPromotionUseCase', () => {
       metadata: expect.objectContaining({
         promotionResult: 'VERSION_CREATED'
       })
+    }));
+  });
+
+  it('records added, changed and removed fields when a new import version arrives', async () => {
+    const repo = createMockRepo();
+    repo.findByDedupKey = vi.fn().mockResolvedValue({ id: 'existing-1' });
+    repo.listVersions = vi.fn().mockResolvedValue([{
+      id: 'version-3',
+      versionNumber: 3,
+      rawContentBlocks: {
+        canonicalMajorName: 'Computer Science',
+        degreeLevel: 'Bachelor',
+        academicFieldOrDiscipline: 'Computing',
+        oldField: 'legacy',
+      },
+    }]);
+    const useCase = new MajorImportPromotionUseCase(repo);
+
+    await useCase.promote(createRecord(ImportRecordStatus.VALID, {
+      canonicalMajorName: 'Computer Science',
+      degreeLevel: 'Bachelor',
+      academicFieldOrDiscipline: 'Computing and Informatics',
+      newField: 'new',
+    }));
+
+    expect(repo.createVersion).toHaveBeenCalledWith(expect.objectContaining({
+      versionNumber: 4,
+      changeSummary: expect.objectContaining({
+        addedFields: ['newField'],
+        changedFields: ['academicFieldOrDiscipline'],
+        removedFields: ['oldField'],
+        diffSource: 'PREVIOUS_VERSION',
+      }),
     }));
   });
 

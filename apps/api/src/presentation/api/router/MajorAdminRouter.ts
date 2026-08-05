@@ -81,6 +81,21 @@ export class MajorAdminRouter {
       res.json({ data: sections });
     }));
 
+    router.get('/:id/aliases', asyncHandler(async (req: Request, res: Response) => {
+      const aliases = await adminMajorUseCases.listAliases(req.params.id);
+      res.json({ data: aliases });
+    }));
+
+    router.get('/:id/relationships', asyncHandler(async (req: Request, res: Response) => {
+      const relationships = await adminMajorUseCases.listRelationships(req.params.id);
+      res.json({ data: relationships });
+    }));
+
+    router.get('/:id/classification-mappings', asyncHandler(async (req: Request, res: Response) => {
+      const mappings = await adminMajorUseCases.listClassificationMappings(req.params.id);
+      res.json({ data: mappings });
+    }));
+
     router.get('/:id/sources', asyncHandler(async (req: Request, res: Response) => {
       const sources = await adminMajorUseCases.listSources(req.params.id);
       res.json({ data: sources });

@@ -1,11 +1,14 @@
 import {
   IMajorRepository,
+  MajorAliasDto,
+  MajorClassificationMappingDto,
   MajorContentSectionDto,
   MajorCompletenessClassifier,
   MajorDto,
   MajorFilters,
   MajorImportCompletenessState,
   MajorLevelProfileDto,
+  MajorRelationshipDto,
   MajorSourceDto,
   MajorStatus,
   MajorVersionDto,
@@ -41,6 +44,21 @@ export class AdminMajorUseCases {
   public async listContentSections(id: string): Promise<MajorContentSectionDto[]> {
     await this.getMajor(id);
     return this.repository.listContentSections ? this.repository.listContentSections(id) : [];
+  }
+
+  public async listAliases(id: string): Promise<MajorAliasDto[]> {
+    await this.getMajor(id);
+    return this.repository.listAliases ? this.repository.listAliases(id) : [];
+  }
+
+  public async listRelationships(id: string): Promise<MajorRelationshipDto[]> {
+    await this.getMajor(id);
+    return this.repository.listRelationships ? this.repository.listRelationships(id) : [];
+  }
+
+  public async listClassificationMappings(id: string): Promise<MajorClassificationMappingDto[]> {
+    await this.getMajor(id);
+    return this.repository.listClassificationMappings ? this.repository.listClassificationMappings(id) : [];
   }
 
   public async listSources(id: string): Promise<MajorSourceDto[]> {

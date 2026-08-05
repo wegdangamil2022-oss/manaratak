@@ -4,6 +4,8 @@ import {
   IMajorRepository,
   ImportRecordDto,
   ImportRecordStatus,
+  MajorAliasDto,
+  MajorClassificationMappingDto,
   MajorContentSectionDto,
   MajorCompletenessClassifier,
   MajorDeduplicationService,
@@ -151,9 +153,11 @@ export class MajorImportPromotionUseCase {
       ? await this.repository.listVersions(majorId)
       : [];
     const versionNumber = explicitVersionNumber ?? ((existingVersions[0]?.versionNumber ?? 0) + 1);
+    const previousRawPayload = existingVersions[0]?.rawContentBlocks;
+    let sourceId: string | undefined;
 
     if (this.repository.createSource) {
-      await this.repository.createSource({
+      const source = await this.repository.createSource({
         majorId,
         profileId: profile?.id,
         sourceType: payload.sourceImportMode === 'DETAIL_DOSSIER' ? 'DETAIL_DOSSIER' : 'CATALOG_FILE',
@@ -168,7 +172,11 @@ export class MajorImportPromotionUseCase {
           sourceImportMode: payload.sourceImportMode ?? 'CATALOG_IDENTITY_ONLY',
         },
       });
+      sourceId = source.id;
     }
+
+    await this.attachAliases(majorId, payload, sourceId);
+    await this.attachClassificationMappings(majorId, profile?.id, payload);
 
     if (this.repository.createVersion) {
       const version = await this.repository.createVersion({
@@ -181,11 +189,7 @@ export class MajorImportPromotionUseCase {
         sourceUri,
         sourceHash,
         importedAt: new Date(),
-        changeSummary: {
-          addedFields: Object.keys(payload),
-          changedFields: promotionResult === 'VERSION_CREATED' ? Object.keys(payload) : [],
-          removedFields: [],
-        },
+        changeSummary: this.buildChangeSummary(payload, previousRawPayload, promotionResult),
         rawContentBlocks: this.asRecord(rawPayload),
         metadata: {
           importStatus: record.status,
@@ -200,6 +204,35 @@ export class MajorImportPromotionUseCase {
     }
 
     return versionNumber;
+  }
+
+  private buildChangeSummary(
+    payload: MajorImportPayload,
+    previousRawPayload: unknown,
+    promotionResult: 'CREATED' | 'VERSION_CREATED'
+  ): Record<string, unknown> {
+    const current = this.asRecord(payload);
+    const previous = this.asRecord(previousRawPayload);
+    const currentKeys = new Set(Object.keys(current));
+    const previousKeys = new Set(Object.keys(previous));
+
+    const addedFields = [...currentKeys].filter((key) => !previousKeys.has(key));
+    const removedFields = [...previousKeys].filter((key) => !currentKeys.has(key));
+    const changedFields = [...currentKeys].filter((key) => {
+      if (!previousKeys.has(key)) {
+        return false;
+      }
+      return JSON.stringify(current[key]) !== JSON.stringify(previous[key]);
+    });
+
+    return {
+      addedFields: promotionResult === 'CREATED' ? Object.keys(current) : addedFields,
+      changedFields,
+      removedFields,
+      fieldCount: Object.keys(current).length,
+      previousFieldCount: Object.keys(previous).length,
+      diffSource: previousRawPayload ? 'PREVIOUS_VERSION' : 'INITIAL_IMPORT',
+    };
   }
 
   private normalizeLevel(value: string | undefined): MajorLevel | undefined {
@@ -254,6 +287,92 @@ export class MajorImportPromotionUseCase {
         sourceImportMode: payload.sourceImportMode ?? 'CATALOG_IDENTITY_ONLY',
       },
     });
+  }
+
+  private toStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()];
+    }
+    return [];
+  }
+
+  private async attachAliases(majorId: string, payload: MajorImportPayload, sourceId: string | undefined): Promise<void> {
+    if (!this.repository.createAliases) {
+      return;
+    }
+
+    const aliases: Array<Omit<MajorAliasDto, 'id'>> = [];
+    const localizedAr = this.pickLocalizedName(payload, 'ar');
+    const localizedEn = this.pickLocalizedName(payload, 'en');
+
+    const pushAlias = (
+      alias: string | undefined,
+      locale: string | undefined,
+      aliasType: NonNullable<MajorAliasDto['aliasType']>
+    ) => {
+      const trimmed = alias?.trim();
+      if (!trimmed) {
+        return;
+      }
+      aliases.push({
+        majorId,
+        locale,
+        alias: trimmed,
+        normalizedAlias: MajorNamingService.normalizeSearchText(trimmed),
+        aliasType,
+        sourceId,
+      });
+    };
+
+    pushAlias(payload.canonicalMajorName, undefined, 'ALIAS');
+    pushAlias(localizedAr, 'ar', 'TRANSLATION');
+    pushAlias(localizedEn, 'en', 'TRANSLATION');
+    this.toStringArray(payload.aliases).forEach((alias) => pushAlias(alias, undefined, 'ALIAS'));
+    this.toStringArray(payload.synonyms).forEach((alias) => pushAlias(alias, undefined, 'SYNONYM'));
+
+    await this.repository.createAliases(aliases);
+  }
+
+  private async attachClassificationMappings(
+    majorId: string,
+    profileId: string | undefined,
+    payload: MajorImportPayload
+  ): Promise<void> {
+    if (!this.repository.createClassificationMappings) {
+      return;
+    }
+
+    const mappings: Array<Omit<MajorClassificationMappingDto, 'id'>> = [];
+    if (payload.academicFieldId) {
+      mappings.push({
+        majorId,
+        profileId,
+        taxonomyNodeId: payload.academicFieldId,
+        relationshipType: 'PRIMARY',
+        standardType: payload.sourceClassificationSystem,
+        standardCode: payload.classificationCode,
+        confidence: 0.9,
+        metadata: { sourceImportMode: payload.sourceImportMode ?? 'CATALOG_IDENTITY_ONLY' },
+      });
+    }
+
+    if (payload.disciplineId && payload.disciplineId !== payload.academicFieldId) {
+      mappings.push({
+        majorId,
+        profileId,
+        taxonomyNodeId: payload.disciplineId,
+        relationshipType: 'SECONDARY',
+        standardType: payload.sourceClassificationSystem,
+        standardCode: payload.classificationCode,
+        confidence: 0.85,
+        metadata: { sourceImportMode: payload.sourceImportMode ?? 'CATALOG_IDENTITY_ONLY' },
+      });
+    }
+
+    await this.repository.createClassificationMappings(mappings);
   }
 
   private async attachContentSections(profileId: string | undefined, versionId: string | undefined, payload: MajorImportPayload): Promise<void> {
