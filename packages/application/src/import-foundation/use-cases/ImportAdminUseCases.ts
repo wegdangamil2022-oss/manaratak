@@ -234,6 +234,38 @@ export class ImportAdminUseCases {
     };
   }
 
+  previewMajorCatalogText(input: {
+    dataText: string;
+    catalogKind?: MajorCatalogKind;
+    sourceFileName?: string;
+  }) {
+    const parsed = MajorCatalogMarkdownParser.parse(input.dataText, input.catalogKind);
+    return {
+      summary: {
+        catalogKind: parsed.catalogKind,
+        targetDomain: parsed.targetDomain,
+        totalRecords: parsed.rows.length,
+        skippedRows: parsed.skippedRows,
+        importMode: 'CATALOG_IDENTITY_ONLY',
+        sourceFileName: input.sourceFileName,
+        duplicatePolicy: 'Major identity is deduplicated by concept and Phase 8 classification context; catalog codes create level profiles, not duplicate majors.',
+        reviewPolicy: 'Records are staged as NEEDS_REVIEW and must be promoted into the majors workspace before editorial approval or publication.',
+      },
+      previewRows: parsed.rows.slice(0, 25).map((row) => ({
+        code: row.code,
+        catalogKind: row.catalogKind,
+        targetDomain: row.targetDomain,
+        canonicalMajorName: row.canonicalMajorName,
+        localizedNames: row.localizedNames,
+        degreeLevel: row.degreeLevel,
+        academicFieldOrDiscipline: row.academicFieldOrDiscipline,
+        collegeOrFaculty: row.collegeOrFaculty,
+        fellowshipType: row.fellowshipType,
+        professionalDomain: row.professionalDomain,
+      })),
+    };
+  }
+
   async importMajorDetailDossierText(input: {
     dataText: string;
     sourceSystem?: string;
@@ -290,6 +322,41 @@ export class ImportAdminUseCases {
         importMode: 'DETAIL_DOSSIER',
       },
       records: records.slice(0, 100),
+    };
+  }
+
+  previewMajorDetailDossierText(input: {
+    dataText: string;
+    catalogKind?: MajorCatalogKind;
+    sourceFileName?: string;
+  }) {
+    const parsed = MajorDetailDossierMarkdownParser.parse(input.dataText, input.catalogKind);
+    return {
+      summary: {
+        catalogKind: parsed.catalogKind,
+        targetDomain: parsed.targetDomain,
+        totalRecords: parsed.rows.length,
+        skippedSections: parsed.skippedSections,
+        importMode: 'DETAIL_DOSSIER',
+        sourceFileName: input.sourceFileName,
+        totalContentSections: parsed.rows.reduce((sum, row) => sum + row.contentBlocks.length, 0),
+        duplicatePolicy: 'Detail dossiers attach to the existing Major and level profile when the identity key matches; they create a new import version instead of overwriting published data.',
+        reviewPolicy: 'Extracted sections remain NEEDS_REVIEW until a domain administrator approves and publishes the version.',
+      },
+      previewRows: parsed.rows.slice(0, 25).map((row) => ({
+        code: row.code,
+        catalogKind: row.catalogKind,
+        targetDomain: row.targetDomain,
+        canonicalMajorName: row.canonicalMajorName,
+        localizedNames: row.localizedNames,
+        degreeLevel: row.degreeLevel,
+        contentSectionCount: row.contentBlocks.length,
+        contentSections: row.contentBlocks.slice(0, 8).map((block) => ({
+          blockKey: block.blockKey,
+          title: block.title,
+          reviewStatus: block.reviewStatus,
+        })),
+      })),
     };
   }
 

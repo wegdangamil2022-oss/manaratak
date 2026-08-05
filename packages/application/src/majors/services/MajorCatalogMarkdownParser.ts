@@ -129,7 +129,11 @@ export class MajorCatalogMarkdownParser {
   }
 
   private static isCatalogStartHeading(heading: string): boolean {
-    return heading.includes('القائمة الكاملة') || heading.includes('قائمة الزمالات');
+    return heading.includes('القائمة الكاملة')
+      || heading.includes('قائمة الزمالات')
+      || heading.includes('Complete Catalog')
+      || heading.includes('Full Catalog')
+      || heading.includes('Fellowship Catalog');
   }
 
   private static isCatalogStopHeading(heading: string): boolean {
@@ -137,7 +141,12 @@ export class MajorCatalogMarkdownParser {
       || heading.includes('المسميات المستبعدة')
       || heading.includes('نموذج الاستيراد')
       || heading.includes('قاعدة منع التكرار')
-      || heading.includes('قرار الاستخدام');
+      || heading.includes('قرار الاستخدام')
+      || heading.includes('Cross-listed')
+      || heading.includes('Excluded')
+      || heading.includes('Import Model')
+      || heading.includes('Deduplication')
+      || heading.includes('Usage Decision');
   }
 
   private static parseTableColumns(line: string): string[] {

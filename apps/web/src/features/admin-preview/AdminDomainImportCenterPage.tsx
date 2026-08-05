@@ -28,6 +28,7 @@ import {
   BookOpen, 
   Award, 
   Sliders, 
+  Search,
   RotateCcw,
   Play,
   Paperclip
@@ -906,6 +907,7 @@ export function AdminDomainImportCenterPage() {
   const [selectedMajorImportBatchId, setSelectedMajorImportBatchId] = useState<string>('');
   const [majorImportRecords, setMajorImportRecords] = useState<MajorImportRecordPreview[]>([]);
   const [majorImportReviewLoading, setMajorImportReviewLoading] = useState<boolean>(false);
+  const [majorImportPreview, setMajorImportPreview] = useState<any | null>(null);
   
   // Admin instructions
   const [instructions, setInstructions] = useState<Record<string, any>>({
@@ -1185,6 +1187,28 @@ export function AdminDomainImportCenterPage() {
         : `${count} ${label} records were staged for review.`);
     } catch (error) {
       setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر تشغيل الاستيراد.' : 'Import could not be started.'));
+    } finally {
+      setMajorImportRunning(null);
+    }
+  };
+
+  const handlePreviewMajorWorkspaceImport = async (kind: MajorCatalogKind, mode: 'catalog' | 'details') => {
+    const label = MAJOR_KIND_LABELS[kind][isRTL ? 'ar' : 'en'];
+    const runKey = `${kind}-${mode}-preview`;
+    setMajorImportRunning(runKey);
+    setMajorImportNotice(null);
+    try {
+      const result = mode === 'catalog'
+        ? await ApiClient.previewMajorCatalogFromWorkspace(kind)
+        : await ApiClient.previewMajorDetailDossierFromWorkspace(kind);
+      setMajorImportPreview({ kind, mode, label, ...result });
+      const count = result?.summary?.totalRecords ?? 0;
+      const sectionCount = result?.summary?.totalContentSections;
+      setMajorImportNotice(isRTL
+        ? `تم تحليل ${count} سجل من ${label}${typeof sectionCount === 'number' ? ` مع ${sectionCount} قسم تفاصيل` : ''}. لم يتم إنشاء دفعة استيراد بعد.`
+        : `${count} ${label} records analyzed${typeof sectionCount === 'number' ? ` with ${sectionCount} detail sections` : ''}. No import batch has been created yet.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر تحليل ملف الاستيراد.' : 'Import preview could not be analyzed.'));
     } finally {
       setMajorImportRunning(null);
     }
@@ -1932,6 +1956,65 @@ export function AdminDomainImportCenterPage() {
             </div>
           )}
 
+          {majorImportPreview && (
+            <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-emerald-950">
+                    {isRTL ? `معاينة ${majorImportPreview.label}` : `${majorImportPreview.label} preview`}
+                  </h3>
+                  <p className="mt-1 text-xs leading-6 text-emerald-900">
+                    {majorImportPreview.summary?.duplicatePolicy}
+                  </p>
+                </div>
+                <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-extrabold text-emerald-800">
+                  {majorImportPreview.mode === 'catalog'
+                    ? (isRTL ? 'كتالوج' : 'Catalog')
+                    : (isRTL ? 'تفاصيل' : 'Details')}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-xl bg-white p-3">
+                  <span className="block text-[10px] font-bold text-slate-400">{isRTL ? 'السجلات' : 'Records'}</span>
+                  <strong className="text-base text-slate-950">{majorImportPreview.summary?.totalRecords ?? 0}</strong>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <span className="block text-[10px] font-bold text-slate-400">{isRTL ? 'الأقسام' : 'Sections'}</span>
+                  <strong className="text-base text-slate-950">{majorImportPreview.summary?.totalContentSections ?? '-'}</strong>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <span className="block text-[10px] font-bold text-slate-400">{isRTL ? 'المتخطى' : 'Skipped'}</span>
+                  <strong className="text-base text-slate-950">{majorImportPreview.summary?.skippedRows ?? majorImportPreview.summary?.skippedSections ?? 0}</strong>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <span className="block text-[10px] font-bold text-slate-400">{isRTL ? 'الوضع' : 'Mode'}</span>
+                  <strong className="text-xs text-slate-950">{majorImportPreview.summary?.importMode}</strong>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {(majorImportPreview.previewRows || []).slice(0, 6).map((row: any) => (
+                  <div key={`${row.code}-${row.canonicalMajorName}`} className="rounded-xl bg-white p-3 text-xs">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="font-mono font-black text-slate-900">{row.code}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                        {row.degreeLevel || row.catalogKind}
+                      </span>
+                    </div>
+                    <p className="font-extrabold leading-6 text-slate-900">{row.localizedNames?.ar || row.canonicalMajorName}</p>
+                    {row.canonicalMajorName && <p dir="ltr" className="mt-1 truncate text-right text-[11px] text-slate-500">{row.canonicalMajorName}</p>}
+                    {typeof row.contentSectionCount === 'number' && (
+                      <p className="mt-1 text-[11px] font-bold text-emerald-700">
+                        {row.contentSectionCount} {isRTL ? 'قسم تفاصيل' : 'detail sections'}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {MAJOR_IMPORT_CARDS.map((card) => {
               const catalogRunKey = `${card.kind}-catalog`;
@@ -1980,6 +2063,22 @@ export function AdminDomainImportCenterPage() {
                   </div>
 
                   <div className="pt-3 mt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handlePreviewMajorWorkspaceImport(card.kind, 'catalog')}
+                      disabled={majorImportRunning !== null}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 disabled:bg-slate-100 border border-blue-200 text-blue-800 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5"
+                    >
+                      {majorImportRunning === `${catalogRunKey}-preview` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'معاينة الكتالوج' : 'Preview catalog'}</span>
+                    </button>
+                    <button
+                      onClick={() => handlePreviewMajorWorkspaceImport(card.kind, 'details')}
+                      disabled={majorImportRunning !== null || card.detailRecords === 0}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 disabled:bg-slate-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5"
+                    >
+                      {majorImportRunning === `${detailsRunKey}-preview` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                      <span>{isRTL ? 'معاينة التفاصيل' : 'Preview details'}</span>
+                    </button>
                     <button
                       onClick={() => handleRunMajorWorkspaceImport(card.kind, 'catalog')}
                       disabled={majorImportRunning !== null}

@@ -146,4 +146,72 @@ describe('ImportAdminUseCases - Queue Status Integration', () => {
       expect(result.records.length).toBe(100); // capped at 100
     });
   });
+
+  describe('Phase 10 major import previews', () => {
+    it('previews a major catalog without creating import batches', () => {
+      let createdBatch = false;
+      const previewRepo = {
+        ...mockImportRepo,
+        createBatch: async (data: any) => {
+          createdBatch = true;
+          return { id: 'batch-preview-should-not-exist', ...data };
+        },
+      };
+      const useCase = new ImportAdminUseCases(previewRepo);
+
+      const result = useCase.previewMajorCatalogText({
+        catalogKind: 'BACHELOR',
+        sourceFileName: 'sample.md',
+        dataText: [
+          '# القائمة الكاملة حسب الكليات',
+          '## كلية الحاسب',
+          '| MJR-0100 | علوم الحاسب | Computer Science |',
+        ].join('\n'),
+      });
+
+      expect(createdBatch).toBe(false);
+      expect(result.summary).toMatchObject({
+        catalogKind: 'BACHELOR',
+        totalRecords: 1,
+        importMode: 'CATALOG_IDENTITY_ONLY',
+        sourceFileName: 'sample.md',
+      });
+      expect(result.summary.duplicatePolicy).toContain('deduplicated');
+      expect(result.previewRows[0]).toMatchObject({
+        code: 'MJR-0100',
+        canonicalMajorName: 'Computer Science',
+        degreeLevel: 'Bachelor',
+      });
+    });
+
+    it('previews detail dossiers with extracted content section counts', () => {
+      const useCase = new ImportAdminUseCases(mockImportRepo);
+
+      const result = useCase.previewMajorDetailDossierText({
+        catalogKind: 'MASTER',
+        sourceFileName: 'masters.md',
+        dataText: [
+          '# 1. علوم البيانات — Data Science',
+          'الكود: MAS-0001',
+          '## النبذة',
+          'تفاصيل مختصرة.',
+          '## البحث أو المشروع',
+          'مشروع تطبيقي.',
+        ].join('\n'),
+      });
+
+      expect(result.summary).toMatchObject({
+        catalogKind: 'MASTER',
+        totalRecords: 1,
+        totalContentSections: 2,
+        importMode: 'DETAIL_DOSSIER',
+      });
+      expect(result.previewRows[0]).toMatchObject({
+        code: 'MAS-0001',
+        canonicalMajorName: 'Data Science',
+        degreeLevel: 'Master',
+        contentSectionCount: 2,
+      });
+    });
+  });
 });

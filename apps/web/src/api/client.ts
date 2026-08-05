@@ -1124,6 +1124,28 @@ export class ApiClient {
     return res.json();
   }
 
+  static async previewMajorCatalogFromWorkspace(catalogKind: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-catalogs/workspace/${encodeURIComponent(catalogKind)}/preview`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major catalog');
+    }
+    return res.json();
+  }
+
+  static async previewMajorCatalogText(payload: { catalogKind: string; dataText: string; sourceFileName?: string; sourceSystem?: string }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-catalogs/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major catalog');
+    }
+    return res.json();
+  }
+
   static async importMajorDetailDossierFromWorkspace(catalogKind: string): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/workspace/${encodeURIComponent(catalogKind)}`, {
       method: 'POST',
@@ -1132,6 +1154,28 @@ export class ApiClient {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to import major detail dossier');
+    }
+    return res.json();
+  }
+
+  static async previewMajorDetailDossierFromWorkspace(catalogKind: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/workspace/${encodeURIComponent(catalogKind)}/preview`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major detail dossier');
+    }
+    return res.json();
+  }
+
+  static async previewMajorDetailDossierText(payload: { catalogKind: string; dataText: string; sourceFileName?: string; sourceSystem?: string }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major detail dossier');
     }
     return res.json();
   }

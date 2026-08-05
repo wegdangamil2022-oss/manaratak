@@ -111,6 +111,16 @@ export class ImportAdminRouter {
       res.status(201).json(result);
     }));
 
+    router.post('/major-catalogs/preview', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorCatalogBodySchema.parse(req.body);
+      const result = importAdminUseCases.previewMajorCatalogText({
+        dataText: payload.dataText ?? '',
+        catalogKind: payload.catalogKind,
+        sourceFileName: payload.sourceFileName,
+      });
+      res.status(200).json(result);
+    }));
+
     router.post('/major-catalogs/workspace/:catalogKind', asyncHandler(async (req: Request, res: Response) => {
       const catalogKind = majorCatalogKindSchema.parse(req.params.catalogKind);
       const sourceFileName = MAJOR_CATALOG_FILES[catalogKind];
@@ -126,6 +136,20 @@ export class ImportAdminRouter {
       res.status(201).json(result);
     }));
 
+    router.get('/major-catalogs/workspace/:catalogKind/preview', asyncHandler(async (req: Request, res: Response) => {
+      const catalogKind = majorCatalogKindSchema.parse(req.params.catalogKind);
+      const sourceFileName = MAJOR_CATALOG_FILES[catalogKind];
+      const catalogPath = path.resolve(process.cwd(), 'workspace', 'phase-10-major-catalogs', sourceFileName);
+      const dataText = await readFile(catalogPath, 'utf8');
+
+      const result = importAdminUseCases.previewMajorCatalogText({
+        dataText,
+        catalogKind,
+        sourceFileName,
+      });
+      res.status(200).json(result);
+    }));
+
     router.post('/major-detail-dossiers', asyncHandler(async (req: Request, res: Response) => {
       const payload = majorDetailDossierBodySchema.parse(req.body);
       const result = await importAdminUseCases.importMajorDetailDossierText({
@@ -135,6 +159,16 @@ export class ImportAdminRouter {
         sourceFileName: payload.sourceFileName,
       });
       res.status(201).json(result);
+    }));
+
+    router.post('/major-detail-dossiers/preview', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorDetailDossierBodySchema.parse(req.body);
+      const result = importAdminUseCases.previewMajorDetailDossierText({
+        dataText: payload.dataText ?? '',
+        catalogKind: payload.catalogKind,
+        sourceFileName: payload.sourceFileName,
+      });
+      res.status(200).json(result);
     }));
 
     router.post('/major-detail-dossiers/workspace/:catalogKind', asyncHandler(async (req: Request, res: Response) => {
@@ -150,6 +184,20 @@ export class ImportAdminRouter {
         sourceFileName,
       });
       res.status(201).json(result);
+    }));
+
+    router.get('/major-detail-dossiers/workspace/:catalogKind/preview', asyncHandler(async (req: Request, res: Response) => {
+      const catalogKind = majorCatalogKindSchema.parse(req.params.catalogKind);
+      const sourceFileName = MAJOR_DETAIL_DOSSIER_FILES[catalogKind];
+      const dossierPath = path.resolve(process.cwd(), 'workspace', 'phase-10-major-detail-dossiers', sourceFileName);
+      const dataText = await readFile(dossierPath, 'utf8');
+
+      const result = importAdminUseCases.previewMajorDetailDossierText({
+        dataText,
+        catalogKind,
+        sourceFileName,
+      });
+      res.status(200).json(result);
     }));
 
     // GET /admin/imports/queue/jobs/:batchId

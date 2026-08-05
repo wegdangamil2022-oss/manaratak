@@ -13,7 +13,11 @@ describe('ImportAdminRouter', () => {
     cancelQueueJob: vi.fn(),
     replayQueueJob: vi.fn(),
     listBatches: vi.fn(),
-    listRecords: vi.fn()
+    listRecords: vi.fn(),
+    previewMajorCatalogText: vi.fn(),
+    previewMajorDetailDossierText: vi.fn(),
+    importMajorCatalogText: vi.fn(),
+    importMajorDetailDossierText: vi.fn()
   });
   
   const createMockRepository = () => ({
@@ -39,6 +43,56 @@ describe('ImportAdminRouter', () => {
     }));
     return app;
   };
+
+  describe('Phase 10 major import preview endpoints', () => {
+    it('POST /admin/imports/major-catalogs/preview returns parsed catalog preview', async () => {
+      const useCases = createMockUseCases();
+      useCases.previewMajorCatalogText.mockReturnValue({
+        summary: { catalogKind: 'BACHELOR', totalRecords: 1 },
+        previewRows: [{ code: 'MJR-0100', canonicalMajorName: 'Computer Science' }]
+      });
+      const app = createApp(useCases);
+
+      const res = await request(app)
+        .post('/admin/imports/major-catalogs/preview')
+        .send({
+          catalogKind: 'BACHELOR',
+          sourceFileName: 'sample.md',
+          dataText: '| MJR-0100 | علوم الحاسب | Computer Science |'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.summary.totalRecords).toBe(1);
+      expect(useCases.previewMajorCatalogText).toHaveBeenCalledWith(expect.objectContaining({
+        catalogKind: 'BACHELOR',
+        sourceFileName: 'sample.md',
+      }));
+    });
+
+    it('POST /admin/imports/major-detail-dossiers/preview returns parsed detail preview', async () => {
+      const useCases = createMockUseCases();
+      useCases.previewMajorDetailDossierText.mockReturnValue({
+        summary: { catalogKind: 'MASTER', totalRecords: 1, totalContentSections: 2 },
+        previewRows: [{ code: 'MAS-0001', contentSectionCount: 2 }]
+      });
+      const app = createApp(useCases);
+
+      const res = await request(app)
+        .post('/admin/imports/major-detail-dossiers/preview')
+        .send({
+          catalogKind: 'MASTER',
+          sourceFileName: 'masters.md',
+          dataText: '# 1. علوم البيانات — Data Science\nالكود: MAS-0001\n## النبذة\nنص'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.summary.totalContentSections).toBe(2);
+      expect(useCases.previewMajorDetailDossierText).toHaveBeenCalledWith(expect.objectContaining({
+        catalogKind: 'MASTER',
+        sourceFileName: 'masters.md',
+      }));
+    });
+  });
 
   describe('POST /admin/imports/records/:id/promote', () => {
     it('returns 422 for unsupported domains safely', async () => {
