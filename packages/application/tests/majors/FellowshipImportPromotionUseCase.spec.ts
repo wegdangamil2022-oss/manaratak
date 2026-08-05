@@ -41,7 +41,7 @@ describe('FellowshipImportPromotionUseCase', () => {
     expect(result.type).toBe('CREATED');
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({
       displayName: 'Clinical Cardiology Fellowship',
-      canonicalDedupKey: 'clinical-cardiology-fellowship|unknown|manaratak-phase-10-catalog|fel-0001',
+      canonicalDedupKey: 'clinical-cardiology-fellowship|clinical-fellowship|medicine',
       fellowshipType: 'Clinical Fellowship',
       professionalDomain: 'Medicine',
       status: MajorStatus.READY_TO_REVIEW,

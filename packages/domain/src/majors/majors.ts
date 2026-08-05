@@ -300,33 +300,105 @@ export class MajorCompletenessClassifier {
 export class MajorNamingService {
   static normalize(name: string): string { return name.trim(); }
 
-  static normalizeForKey(value: string | undefined): string {
-    return (value ?? 'unknown')
+  static normalizeArabic(value: string): string {
+    return value
+      .trim()
+      .normalize('NFKD')
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/\u0640/g, '')
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .replace(/ؤ/g, 'و')
+      .replace(/ئ/g, 'ي')
+      .replace(/ة/g, 'ه')
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  static normalizeEnglish(value: string): string {
+    return value
       .trim()
       .toLowerCase()
       .normalize('NFKD')
-      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  static normalizeSearchText(value: string | undefined): string {
+    const raw = value?.trim();
+    if (!raw) {
+      return 'unknown';
+    }
+
+    const normalized = /[\u0600-\u06FF]/.test(raw)
+      ? this.normalizeArabic(raw)
+      : this.normalizeEnglish(raw);
+
+    return normalized || 'unknown';
+  }
+
+  static normalizeForKey(value: string | undefined): string {
+    return this.normalizeSearchText(value)
       .replace(/[^a-z0-9\u0600-\u06FF]+/g, '-')
       .replace(/(^-|-$)+/g, '') || 'unknown';
   }
 }
 export class MajorDeduplicationService {
   static generateKey(payload: MajorImportPayload): string {
-    const name = MajorNamingService.normalizeForKey(payload.canonicalMajorName);
-    const discipline = MajorNamingService.normalizeForKey(payload.academicFieldOrDiscipline);
-    const classification = MajorNamingService.normalizeForKey(payload.sourceClassificationSystem);
-    const code = MajorNamingService.normalizeForKey(payload.classificationCode);
-    return [name, discipline, classification, code].join('|');
+    const concept = MajorNamingService.normalizeForKey(
+      payload.canonicalMajorName
+        || payload.localizedNames?.en
+        || payload.localizedNames?.ar
+    );
+    const primaryDiscipline = MajorNamingService.normalizeForKey(
+      payload.disciplineId
+        || payload.academicFieldId
+        || payload.academicFieldOrDiscipline
+    );
+    const classificationContext = MajorNamingService.normalizeForKey(
+      typeof payload.metadata?.classificationContext === 'string'
+        ? payload.metadata.classificationContext
+        : undefined
+    );
+
+    return [concept, primaryDiscipline, classificationContext].join('|');
   }
 
   static generateProfileKey(payload: MajorImportPayload): string {
     const majorKey = this.generateKey(payload);
     const degree = MajorNamingService.normalizeForKey(payload.degreeLevel);
-    return `${majorKey}|${degree}`;
+    const profileType = MajorNamingService.normalizeForKey(
+      typeof payload.metadata?.profileType === 'string'
+        ? payload.metadata.profileType
+        : undefined
+    );
+    return `${majorKey}|${degree}|${profileType}`;
   }
 
   static generateCrossListingContext(payload: MajorImportPayload): string | undefined {
     const college = MajorNamingService.normalizeForKey(payload.collegeOrFaculty || payload.facultyName);
     return college === 'unknown' ? undefined : college;
+  }
+}
+
+export class FellowshipDeduplicationService {
+  static generateKey(payload: MajorImportPayload): string {
+    const name = MajorNamingService.normalizeForKey(
+      payload.canonicalMajorName
+        || payload.localizedNames?.en
+        || payload.localizedNames?.ar
+    );
+    const fellowshipType = MajorNamingService.normalizeForKey(
+      typeof payload.fellowshipType === 'string' ? payload.fellowshipType : undefined
+    );
+    const professionalDomain = MajorNamingService.normalizeForKey(
+      typeof payload.professionalDomain === 'string'
+        ? payload.professionalDomain
+        : payload.academicFieldOrDiscipline
+    );
+
+    return [name, fellowshipType, professionalDomain].join('|');
   }
 }

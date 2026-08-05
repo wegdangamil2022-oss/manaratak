@@ -3,6 +3,7 @@ import {
   IMajorRepository,
   ImportRecordDto,
   ImportRecordStatus,
+  MajorDeduplicationService,
   MajorImportCompletenessState,
   MajorStatus
 } from '@manaratak/domain';
@@ -67,7 +68,7 @@ describe('MajorImportPromotionUseCase', () => {
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({
       displayName: 'Computer Science',
       canonicalName: 'Computer Science',
-      canonicalDedupKey: 'computer-science|computing|cip|unknown',
+      canonicalDedupKey: 'computer-science|computing|unknown',
       status: MajorStatus.IMPORTED,
       completenessStatus: MajorImportCompletenessState.COMPLETE,
       sourceImportRecordId: 'rec-1',
@@ -195,6 +196,94 @@ describe('MajorImportPromotionUseCase', () => {
         title: 'النبذة',
         content: 'تفاصيل التخصص.',
         reviewStatus: 'NEEDS_REVIEW',
+      }),
+    ]);
+  });
+
+  it('keeps the same Major identity across MJR, MAS and DOC catalog codes', () => {
+    const bachelorKey = MajorDeduplicationService.generateKey({
+      canonicalMajorName: 'Medical Sciences',
+      degreeLevel: 'Bachelor',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_CATALOG',
+      academicFieldOrDiscipline: 'Health Sciences',
+      collegeOrFaculty: 'College of Medicine',
+      classificationCode: 'MJR-0004',
+    });
+
+    const masterKey = MajorDeduplicationService.generateKey({
+      canonicalMajorName: 'Medical Sciences',
+      degreeLevel: 'Master',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_CATALOG',
+      academicFieldOrDiscipline: 'Health Sciences',
+      collegeOrFaculty: 'Graduate Studies',
+      classificationCode: 'MAS-0001',
+    });
+
+    const doctorateKey = MajorDeduplicationService.generateKey({
+      canonicalMajorName: 'Medical Sciences',
+      degreeLevel: 'Doctorate',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_DETAIL_DOSSIER',
+      academicFieldOrDiscipline: 'Health Sciences',
+      classificationCode: 'DOC-0001',
+      sourceImportMode: 'DETAIL_DOSSIER',
+    });
+
+    expect(bachelorKey).toBe('medical-sciences|health-sciences|unknown');
+    expect(masterKey).toBe(bachelorKey);
+    expect(doctorateKey).toBe(bachelorKey);
+  });
+
+  it('uses the existing Major and creates a new level profile when degree changes', async () => {
+    const repo = createMockRepo();
+    repo.findByDedupKey = vi.fn().mockResolvedValue({ id: 'major-medical-sciences' });
+    repo.listVersions = vi.fn().mockResolvedValue([{ id: 'version-1', versionNumber: 1 }]);
+    repo.createLevelProfile = vi.fn().mockResolvedValue({ id: 'profile-master-1', level: 'MASTER', code: 'MAS-0001' });
+    const useCase = new MajorImportPromotionUseCase(repo);
+
+    const result = await useCase.promote(createRecord(ImportRecordStatus.NEEDS_REVIEW, {
+      canonicalMajorName: 'Medical Sciences',
+      degreeLevel: 'Master',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_CATALOG',
+      academicFieldOrDiscipline: 'Health Sciences',
+      collegeOrFaculty: 'Graduate College',
+      classificationCode: 'MAS-0001',
+    }));
+
+    expect(result).toEqual({ type: 'VERSION_CREATED', existingId: 'major-medical-sciences', versionNumber: 2 });
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.findByDedupKey).toHaveBeenCalledWith('medical-sciences|health-sciences|unknown');
+    expect(repo.createLevelProfile).toHaveBeenCalledWith(expect.objectContaining({
+      majorId: 'major-medical-sciences',
+      level: 'MASTER',
+      code: 'MAS-0001',
+      collegeContext: 'Graduate College',
+    }));
+  });
+
+  it('keeps detail dossiers attached to the catalog Major instead of creating a duplicate', async () => {
+    const repo = createMockRepo();
+    repo.findByDedupKey = vi.fn().mockResolvedValue({ id: 'major-computer-science' });
+    repo.findLevelProfile = vi.fn().mockResolvedValue({ id: 'profile-bachelor-1', level: 'BACHELOR', code: 'MJR-0100' });
+    repo.listVersions = vi.fn().mockResolvedValue([{ id: 'version-1', versionNumber: 5 }]);
+    const useCase = new MajorImportPromotionUseCase(repo);
+
+    const result = await useCase.promote(createRecord(ImportRecordStatus.NEEDS_REVIEW, {
+      canonicalMajorName: 'Computer Science',
+      degreeLevel: 'Bachelor',
+      sourceClassificationSystem: 'MANARATAK_PHASE_10_DETAIL_DOSSIER',
+      academicFieldOrDiscipline: 'Computing',
+      classificationCode: 'MJR-0100',
+      sourceImportMode: 'DETAIL_DOSSIER',
+      contentBlocks: [{ title: 'Overview', content: 'Computer science details.' }],
+    }));
+
+    expect(result).toEqual({ type: 'VERSION_CREATED', existingId: 'major-computer-science', versionNumber: 6 });
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.findByDedupKey).toHaveBeenCalledWith('computer-science|computing|unknown');
+    expect(repo.createContentSections).toHaveBeenCalledWith([
+      expect.objectContaining({
+        profileId: 'profile-bachelor-1',
+        content: 'Computer science details.',
       }),
     ]);
   });

@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   IFellowshipDefinitionRepository,
+  FellowshipDeduplicationService,
   ImportRecordDto,
   ImportRecordStatus,
   MajorCompletenessClassifier,
-  MajorDeduplicationService,
   MajorImportCompletenessState,
   MajorImportPayload,
   MajorImportPayloadSchema,
@@ -44,7 +44,7 @@ export class FellowshipImportPromotionUseCase {
       }
 
       const canonicalName = MajorNamingService.normalize(payload.canonicalMajorName);
-      const dedupKey = MajorDeduplicationService.generateKey(payload);
+      const dedupKey = FellowshipDeduplicationService.generateKey(payload);
       const existing = await this.repository.findByDedupKey(dedupKey);
       const optionalFields = this.buildOptionalFields(payload, rawPayload, record);
 
