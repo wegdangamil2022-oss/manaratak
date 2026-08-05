@@ -213,5 +213,106 @@ describe('ImportAdminUseCases - Queue Status Integration', () => {
         contentSectionCount: 2,
       });
     });
+
+    it('previews multiple major detail dossier files without creating import batches', () => {
+      let createdBatch = false;
+      const previewRepo = {
+        ...mockImportRepo,
+        createBatch: async (data: any) => {
+          createdBatch = true;
+          return { id: 'batch-preview-should-not-exist', ...data };
+        },
+      };
+      const useCase = new ImportAdminUseCases(previewRepo);
+
+      const result = useCase.previewMajorDetailDossierFiles({
+        catalogKind: 'BACHELOR',
+        files: [
+          {
+            sourceFileName: 'batch-01.md',
+            dataText: [
+              '# 1. ط¹ظ„ظ… ط§ظ„ط£ط­ظٹط§ط، ط§ظ„ط·ط¨ظٹ â€” Medical Biology',
+              'ط§ظ„ط±ظ…ط²: MJR-0011',
+              '## ط§ظ„ظ†ط¨ط°ط©',
+              'ظ†طµ ط§ظ„ظ†ط¨ط°ط©.',
+            ].join('\n'),
+          },
+          {
+            sourceFileName: 'batch-02.md',
+            dataText: [
+              '# 2. ط§ظ„ط£ط­ظٹط§ط، ط§ظ„ط¯ظ‚ظٹظ‚ط© ط§ظ„ط·ط¨ظٹط© â€” Medical Microbiology',
+              'ط§ظ„ط±ظ…ط²: MJR-0012',
+              '## ط§ظ„ظ…ظ‡ط§ط±ط§طھ',
+              'ظ†طµ ط§ظ„ظ…ظ‡ط§ط±ط§طھ.',
+            ].join('\n'),
+          },
+        ],
+      });
+
+      expect(createdBatch).toBe(false);
+      expect(result.summary).toMatchObject({
+        catalogKind: 'BACHELOR',
+        totalFiles: 2,
+        totalRecords: 2,
+        totalContentSections: 2,
+        importMode: 'DETAIL_DOSSIER',
+      });
+      expect(result.files.map((file) => file.sourceFileName)).toEqual(['batch-01.md', 'batch-02.md']);
+    });
+
+    it('imports multiple major detail dossier files as separately traceable batches', async () => {
+      const createdBatches: any[] = [];
+      const createdRecords: any[] = [];
+      const bulkRepo = {
+        ...mockImportRepo,
+        createBatch: async (data: any) => {
+          const batch = { id: `batch-${createdBatches.length + 1}`, ...data };
+          createdBatches.push(batch);
+          return batch;
+        },
+        bulkCreateRecords: async (records: any[]) => {
+          createdRecords.push(...records);
+          return { count: records.length };
+        },
+        updateBatchStats: async (id: string, stats: any) => ({ id, ...stats }),
+      };
+      const useCase = new ImportAdminUseCases(bulkRepo);
+
+      const result = await useCase.importMajorDetailDossierFiles({
+        catalogKind: 'BACHELOR',
+        files: [
+          {
+            sourceFileName: 'medicine-01.md',
+            dataText: [
+              '# 1. ط¹ظ„ظ… ط§ظ„ط£ط­ظٹط§ط، ط§ظ„ط·ط¨ظٹ â€” Medical Biology',
+              'ط§ظ„ط±ظ…ط²: MJR-0011',
+              '## ط§ظ„ظ†ط¨ط°ط©',
+              'ظ†طµ ط§ظ„ظ†ط¨ط°ط©.',
+            ].join('\n'),
+          },
+          {
+            sourceFileName: 'medicine-02.md',
+            dataText: [
+              '# 2. ط§ظ„ط£ط­ظٹط§ط، ط§ظ„ط¯ظ‚ظٹظ‚ط© ط§ظ„ط·ط¨ظٹط© â€” Medical Microbiology',
+              'ط§ظ„ط±ظ…ط²: MJR-0012',
+              '## ط§ظ„ظ…ظ‡ط§ط±ط§طھ',
+              'ظ†طµ ط§ظ„ظ…ظ‡ط§ط±ط§طھ.',
+            ].join('\n'),
+          },
+        ],
+      });
+
+      expect(createdBatches).toHaveLength(2);
+      expect(createdRecords).toHaveLength(2);
+      expect(result.summary).toMatchObject({
+        totalFiles: 2,
+        totalRecords: 2,
+        stagedRecords: 2,
+        totalContentSections: 2,
+        importMode: 'DETAIL_DOSSIER',
+      });
+      expect(result.summary.batchIds).toEqual(['batch-1', 'batch-2']);
+      expect(createdRecords.map((record) => record.rawPayload.sourceFileName)).toEqual(['medicine-01.md', 'medicine-02.md']);
+    });
   });
 });

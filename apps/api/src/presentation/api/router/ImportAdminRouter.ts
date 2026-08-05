@@ -93,6 +93,18 @@ export class ImportAdminRouter {
       path: ['dataText'],
     });
 
+    const majorTextImportFileSchema = z.object({
+      dataText: z.string().min(1),
+      sourceSystem: z.string().optional(),
+      sourceFileName: z.string().optional(),
+    });
+
+    const majorMultiFileBodySchema = z.object({
+      catalogKind: majorCatalogKindSchema,
+      sourceSystem: z.string().optional(),
+      files: z.array(majorTextImportFileSchema).min(1).max(50),
+    });
+
     // POST /admin/imports
     router.post('/', asyncHandler(async (req: Request, res: Response) => {
        const payload = importBodySchema.parse(req.body);
@@ -117,6 +129,26 @@ export class ImportAdminRouter {
         dataText: payload.dataText ?? '',
         catalogKind: payload.catalogKind,
         sourceFileName: payload.sourceFileName,
+      });
+      res.status(200).json(result);
+    }));
+
+    router.post('/major-catalogs/bulk', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorMultiFileBodySchema.parse(req.body);
+      const result = await importAdminUseCases.importMajorCatalogFiles({
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        files: payload.files,
+      });
+      res.status(201).json(result);
+    }));
+
+    router.post('/major-catalogs/bulk/preview', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorMultiFileBodySchema.parse(req.body);
+      const result = importAdminUseCases.previewMajorCatalogFiles({
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        files: payload.files,
       });
       res.status(200).json(result);
     }));
@@ -167,6 +199,26 @@ export class ImportAdminRouter {
         dataText: payload.dataText ?? '',
         catalogKind: payload.catalogKind,
         sourceFileName: payload.sourceFileName,
+      });
+      res.status(200).json(result);
+    }));
+
+    router.post('/major-detail-dossiers/bulk', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorMultiFileBodySchema.parse(req.body);
+      const result = await importAdminUseCases.importMajorDetailDossierFiles({
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        files: payload.files,
+      });
+      res.status(201).json(result);
+    }));
+
+    router.post('/major-detail-dossiers/bulk/preview', asyncHandler(async (req: Request, res: Response) => {
+      const payload = majorMultiFileBodySchema.parse(req.body);
+      const result = importAdminUseCases.previewMajorDetailDossierFiles({
+        catalogKind: payload.catalogKind,
+        sourceSystem: payload.sourceSystem,
+        files: payload.files,
       });
       res.status(200).json(result);
     }));

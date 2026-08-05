@@ -1156,6 +1156,32 @@ export class ApiClient {
     return res.json();
   }
 
+  static async importMajorCatalogFiles(payload: { catalogKind: string; sourceSystem?: string; files: Array<{ dataText: string; sourceFileName?: string; sourceSystem?: string }> }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-catalogs/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to import major catalog files');
+    }
+    return res.json();
+  }
+
+  static async previewMajorCatalogFiles(payload: { catalogKind: string; sourceSystem?: string; files: Array<{ dataText: string; sourceFileName?: string; sourceSystem?: string }> }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-catalogs/bulk/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major catalog files');
+    }
+    return res.json();
+  }
+
   static async importMajorDetailDossierFromWorkspace(catalogKind: string): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/workspace/${encodeURIComponent(catalogKind)}`, {
       method: 'POST',
@@ -1186,6 +1212,32 @@ export class ApiClient {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to preview major detail dossier');
+    }
+    return res.json();
+  }
+
+  static async importMajorDetailDossierFiles(payload: { catalogKind: string; sourceSystem?: string; files: Array<{ dataText: string; sourceFileName?: string; sourceSystem?: string }> }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to import major detail dossier files');
+    }
+    return res.json();
+  }
+
+  static async previewMajorDetailDossierFiles(payload: { catalogKind: string; sourceSystem?: string; files: Array<{ dataText: string; sourceFileName?: string; sourceSystem?: string }> }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/imports/major-detail-dossiers/bulk/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to preview major detail dossier files');
     }
     return res.json();
   }

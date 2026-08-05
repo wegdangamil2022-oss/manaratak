@@ -16,6 +16,18 @@ import {
   MajorDetailDossierRow,
 } from '../../majors/services/MajorDetailDossierMarkdownParser';
 
+type MajorTextImportFile = {
+  dataText: string;
+  sourceFileName?: string;
+  sourceSystem?: string;
+};
+
+type MajorMultiTextImportInput = {
+  catalogKind?: MajorCatalogKind;
+  sourceSystem?: string;
+  files: MajorTextImportFile[];
+};
+
 export class ImportAdminUseCases {
   constructor(
     private readonly importRepository: any,
@@ -234,6 +246,51 @@ export class ImportAdminUseCases {
     };
   }
 
+  async importMajorCatalogFiles(input: MajorMultiTextImportInput) {
+    const files = this.normalizeMajorImportFiles(input.files);
+    const results = [];
+    let totalRecords = 0;
+    let processedRecords = 0;
+    let failedRecords = 0;
+    let stagedRecords = 0;
+    let skippedRows = 0;
+
+    for (const file of files) {
+      const result = await this.importMajorCatalogText({
+        dataText: file.dataText,
+        catalogKind: input.catalogKind,
+        sourceFileName: file.sourceFileName,
+        sourceSystem: file.sourceSystem || input.sourceSystem,
+      });
+      totalRecords += result.summary.totalRecords;
+      processedRecords += result.summary.processedRecords;
+      failedRecords += result.summary.failedRecords;
+      stagedRecords += result.summary.stagedRecords;
+      skippedRows += result.summary.skippedRows;
+      results.push(result);
+    }
+
+    return {
+      summary: {
+        catalogKind: input.catalogKind ?? results[0]?.summary?.catalogKind ?? 'BACHELOR',
+        totalFiles: files.length,
+        totalRecords,
+        processedRecords,
+        failedRecords,
+        stagedRecords,
+        skippedRows,
+        importMode: 'CATALOG_IDENTITY_ONLY',
+        batchIds: results.map((result) => result.batch?.id).filter(Boolean),
+      },
+      files: results.map((result, index) => ({
+        sourceFileName: files[index].sourceFileName,
+        batch: result.batch,
+        summary: result.summary,
+        records: result.records,
+      })),
+    };
+  }
+
   previewMajorCatalogText(input: {
     dataText: string;
     catalogKind?: MajorCatalogKind;
@@ -262,6 +319,33 @@ export class ImportAdminUseCases {
         collegeOrFaculty: row.collegeOrFaculty,
         fellowshipType: row.fellowshipType,
         professionalDomain: row.professionalDomain,
+      })),
+    };
+  }
+
+  previewMajorCatalogFiles(input: MajorMultiTextImportInput) {
+    const files = this.normalizeMajorImportFiles(input.files);
+    const previews = files.map((file) => this.previewMajorCatalogText({
+      dataText: file.dataText,
+      catalogKind: input.catalogKind,
+      sourceFileName: file.sourceFileName,
+    }));
+
+    return {
+      summary: {
+        catalogKind: input.catalogKind ?? previews[0]?.summary?.catalogKind ?? 'BACHELOR',
+        targetDomain: previews[0]?.summary?.targetDomain,
+        totalFiles: files.length,
+        totalRecords: previews.reduce((sum, preview) => sum + preview.summary.totalRecords, 0),
+        skippedRows: previews.reduce((sum, preview) => sum + preview.summary.skippedRows, 0),
+        importMode: 'CATALOG_IDENTITY_ONLY',
+        duplicatePolicy: 'Each file is parsed separately; duplicate major identities are still resolved by Phase 10 deduplication during promotion.',
+        reviewPolicy: 'Bulk previews do not create import batches. Each file remains traceable by source file name when imported.',
+      },
+      files: previews.map((preview, index) => ({
+        sourceFileName: files[index].sourceFileName,
+        summary: preview.summary,
+        previewRows: preview.previewRows,
       })),
     };
   }
@@ -319,9 +403,58 @@ export class ImportAdminUseCases {
         failedRecords: 0,
         stagedRecords,
         skippedSections: parsed.skippedSections,
+        totalContentSections: parsed.rows.reduce((sum, row) => sum + row.contentBlocks.length, 0),
         importMode: 'DETAIL_DOSSIER',
       },
       records: records.slice(0, 100),
+    };
+  }
+
+  async importMajorDetailDossierFiles(input: MajorMultiTextImportInput) {
+    const files = this.normalizeMajorImportFiles(input.files);
+    const results = [];
+    let totalRecords = 0;
+    let processedRecords = 0;
+    let failedRecords = 0;
+    let stagedRecords = 0;
+    let skippedSections = 0;
+    let totalContentSections = 0;
+
+    for (const file of files) {
+      const result = await this.importMajorDetailDossierText({
+        dataText: file.dataText,
+        catalogKind: input.catalogKind,
+        sourceFileName: file.sourceFileName,
+        sourceSystem: file.sourceSystem || input.sourceSystem,
+      });
+      totalRecords += result.summary.totalRecords;
+      processedRecords += result.summary.processedRecords;
+      failedRecords += result.summary.failedRecords;
+      stagedRecords += result.summary.stagedRecords;
+      skippedSections += result.summary.skippedSections;
+      totalContentSections += result.summary.totalContentSections;
+      results.push(result);
+    }
+
+    return {
+      summary: {
+        catalogKind: input.catalogKind ?? results[0]?.summary?.catalogKind ?? 'BACHELOR',
+        totalFiles: files.length,
+        totalRecords,
+        processedRecords,
+        failedRecords,
+        stagedRecords,
+        skippedSections,
+        totalContentSections,
+        importMode: 'DETAIL_DOSSIER',
+        batchIds: results.map((result) => result.batch?.id).filter(Boolean),
+      },
+      files: results.map((result, index) => ({
+        sourceFileName: files[index].sourceFileName,
+        batch: result.batch,
+        summary: result.summary,
+        records: result.records,
+      })),
     };
   }
 
@@ -358,6 +491,51 @@ export class ImportAdminUseCases {
         })),
       })),
     };
+  }
+
+  previewMajorDetailDossierFiles(input: MajorMultiTextImportInput) {
+    const files = this.normalizeMajorImportFiles(input.files);
+    const previews = files.map((file) => this.previewMajorDetailDossierText({
+      dataText: file.dataText,
+      catalogKind: input.catalogKind,
+      sourceFileName: file.sourceFileName,
+    }));
+
+    return {
+      summary: {
+        catalogKind: input.catalogKind ?? previews[0]?.summary?.catalogKind ?? 'BACHELOR',
+        targetDomain: previews[0]?.summary?.targetDomain,
+        totalFiles: files.length,
+        totalRecords: previews.reduce((sum, preview) => sum + preview.summary.totalRecords, 0),
+        skippedSections: previews.reduce((sum, preview) => sum + preview.summary.skippedSections, 0),
+        totalContentSections: previews.reduce((sum, preview) => sum + preview.summary.totalContentSections, 0),
+        importMode: 'DETAIL_DOSSIER',
+        duplicatePolicy: 'Each detail dossier keeps its own source file name and creates reviewable import records; promotion attaches versions without overwriting published data.',
+        reviewPolicy: 'Bulk previews do not create import batches. Imported sections remain NEEDS_REVIEW until promoted and approved.',
+      },
+      files: previews.map((preview, index) => ({
+        sourceFileName: files[index].sourceFileName,
+        summary: preview.summary,
+        previewRows: preview.previewRows,
+      })),
+    };
+  }
+
+  private normalizeMajorImportFiles(files: MajorTextImportFile[]): MajorTextImportFile[] {
+    const normalized = files
+      .map((file) => ({
+        ...file,
+        dataText: file.dataText?.trim() ?? '',
+        sourceFileName: file.sourceFileName?.trim() || undefined,
+        sourceSystem: file.sourceSystem?.trim() || undefined,
+      }))
+      .filter((file) => file.dataText.length > 0);
+
+    if (normalized.length === 0) {
+      throw new Error('At least one non-empty import file is required.');
+    }
+
+    return normalized;
   }
 
   private createMajorCatalogRecord(batchId: string, row: MajorCatalogRow, sourceRowNumber: number, sourceFileName?: string) {

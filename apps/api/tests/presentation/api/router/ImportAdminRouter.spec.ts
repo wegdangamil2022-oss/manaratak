@@ -16,8 +16,12 @@ describe('ImportAdminRouter', () => {
     listRecords: vi.fn(),
     previewMajorCatalogText: vi.fn(),
     previewMajorDetailDossierText: vi.fn(),
+    previewMajorCatalogFiles: vi.fn(),
+    previewMajorDetailDossierFiles: vi.fn(),
     importMajorCatalogText: vi.fn(),
-    importMajorDetailDossierText: vi.fn()
+    importMajorDetailDossierText: vi.fn(),
+    importMajorCatalogFiles: vi.fn(),
+    importMajorDetailDossierFiles: vi.fn()
   });
   
   const createMockRepository = () => ({
@@ -90,6 +94,62 @@ describe('ImportAdminRouter', () => {
       expect(useCases.previewMajorDetailDossierText).toHaveBeenCalledWith(expect.objectContaining({
         catalogKind: 'MASTER',
         sourceFileName: 'masters.md',
+      }));
+    });
+
+    it('POST /admin/imports/major-detail-dossiers/bulk/preview previews multiple files', async () => {
+      const useCases = createMockUseCases();
+      useCases.previewMajorDetailDossierFiles.mockReturnValue({
+        summary: { catalogKind: 'BACHELOR', totalFiles: 2, totalRecords: 20, totalContentSections: 280 },
+        files: []
+      });
+      const app = createApp(useCases);
+
+      const res = await request(app)
+        .post('/admin/imports/major-detail-dossiers/bulk/preview')
+        .send({
+          catalogKind: 'BACHELOR',
+          files: [
+            { sourceFileName: 'medicine-01.md', dataText: '# 1. A â€” A\nMJR-0001' },
+            { sourceFileName: 'medicine-02.md', dataText: '# 2. B â€” B\nMJR-0002' },
+          ]
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.summary).toMatchObject({ totalFiles: 2, totalRecords: 20 });
+      expect(useCases.previewMajorDetailDossierFiles).toHaveBeenCalledWith(expect.objectContaining({
+        catalogKind: 'BACHELOR',
+        files: expect.arrayContaining([
+          expect.objectContaining({ sourceFileName: 'medicine-01.md' }),
+          expect.objectContaining({ sourceFileName: 'medicine-02.md' }),
+        ]),
+      }));
+    });
+
+    it('POST /admin/imports/major-detail-dossiers/bulk imports multiple files', async () => {
+      const useCases = createMockUseCases();
+      useCases.importMajorDetailDossierFiles.mockResolvedValue({
+        summary: { catalogKind: 'BACHELOR', totalFiles: 2, totalRecords: 20, stagedRecords: 20 },
+        files: [{ batch: { id: 'batch-1' } }, { batch: { id: 'batch-2' } }]
+      });
+      const app = createApp(useCases);
+
+      const res = await request(app)
+        .post('/admin/imports/major-detail-dossiers/bulk')
+        .send({
+          catalogKind: 'BACHELOR',
+          sourceSystem: 'PHASE_10_BULK_DETAILS',
+          files: [
+            { sourceFileName: 'medicine-01.md', dataText: '# 1. A â€” A\nMJR-0001' },
+            { sourceFileName: 'medicine-02.md', dataText: '# 2. B â€” B\nMJR-0002' },
+          ]
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.summary).toMatchObject({ totalFiles: 2, stagedRecords: 20 });
+      expect(useCases.importMajorDetailDossierFiles).toHaveBeenCalledWith(expect.objectContaining({
+        catalogKind: 'BACHELOR',
+        sourceSystem: 'PHASE_10_BULK_DETAILS',
       }));
     });
   });

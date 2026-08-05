@@ -73,6 +73,12 @@ export interface ScholarshipRecordAudit {
   transferStatus: 'transferred_needs_review';
 }
 
+type MajorBulkImportFile = {
+  sourceFileName: string;
+  dataText: string;
+  sizeBytes: number;
+};
+
 export interface ScholarshipImportBatch {
   id: string;
   batchName: string;
@@ -908,6 +914,8 @@ export function AdminDomainImportCenterPage() {
   const [majorImportRecords, setMajorImportRecords] = useState<MajorImportRecordPreview[]>([]);
   const [majorImportReviewLoading, setMajorImportReviewLoading] = useState<boolean>(false);
   const [majorImportPreview, setMajorImportPreview] = useState<any | null>(null);
+  const [majorBulkCatalogKind, setMajorBulkCatalogKind] = useState<MajorCatalogKind>('BACHELOR');
+  const [majorBulkFiles, setMajorBulkFiles] = useState<MajorBulkImportFile[]>([]);
   
   // Admin instructions
   const [instructions, setInstructions] = useState<Record<string, any>>({
@@ -1164,6 +1172,99 @@ export function AdminDomainImportCenterPage() {
       setPastedPayload(sampleText);
     } catch (error) {
       console.warn('Failed to load sample test import file:', error);
+    }
+  };
+
+  const handleSelectMajorBulkFiles = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) {
+      setMajorBulkFiles([]);
+      return;
+    }
+
+    try {
+      const loadedFiles = await Promise.all(files.map((file) => new Promise<MajorBulkImportFile>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          sourceFileName: file.name,
+          dataText: typeof reader.result === 'string' ? reader.result : '',
+          sizeBytes: file.size,
+        });
+        reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+        reader.readAsText(file);
+      })));
+      setMajorBulkFiles(loadedFiles.filter((file) => file.dataText.trim().length > 0));
+      setMajorImportPreview(null);
+      setMajorImportNotice(isRTL
+        ? `تم تجهيز ${loadedFiles.length} ملف للمعاينة أو الاستيراد.`
+        : `${loadedFiles.length} files are ready for preview or import.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر قراءة الملفات.' : 'Files could not be read.'));
+    }
+  };
+
+  const buildMajorBulkPayload = () => ({
+    catalogKind: majorBulkCatalogKind,
+    sourceSystem: `PHASE_10_${majorBulkCatalogKind}_BULK_DETAIL_DOSSIERS`,
+    files: majorBulkFiles.map((file) => ({
+      sourceFileName: file.sourceFileName,
+      dataText: file.dataText,
+    })),
+  });
+
+  const handlePreviewMajorBulkDetailFiles = async () => {
+    if (majorBulkFiles.length === 0) {
+      setMajorImportNotice(isRTL ? 'اختر ملفًا واحدًا على الأقل قبل المعاينة.' : 'Choose at least one file before preview.');
+      return;
+    }
+
+    setMajorImportRunning('bulk-details-preview');
+    setMajorImportNotice(null);
+    try {
+      const result = await ApiClient.previewMajorDetailDossierFiles(buildMajorBulkPayload());
+      setMajorImportPreview({
+        kind: majorBulkCatalogKind,
+        mode: 'details',
+        label: isRTL ? `${majorBulkFiles.length} ملفات` : `${majorBulkFiles.length} files`,
+        ...result,
+        previewRows: Array.isArray(result?.files)
+          ? result.files.flatMap((file: any) => Array.isArray(file.previewRows) ? file.previewRows : []).slice(0, 25)
+          : [],
+      });
+      setMajorImportNotice(isRTL
+        ? `تم تحليل ${result?.summary?.totalFiles ?? majorBulkFiles.length} ملف: ${result?.summary?.totalRecords ?? 0} تخصص و${result?.summary?.totalContentSections ?? 0} قسم تفاصيل.`
+        : `${result?.summary?.totalFiles ?? majorBulkFiles.length} files analyzed: ${result?.summary?.totalRecords ?? 0} majors and ${result?.summary?.totalContentSections ?? 0} detail sections.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر تحليل الملفات.' : 'Files could not be previewed.'));
+    } finally {
+      setMajorImportRunning(null);
+    }
+  };
+
+  const handleImportMajorBulkDetailFiles = async () => {
+    if (majorBulkFiles.length === 0) {
+      setMajorImportNotice(isRTL ? 'اختر ملفًا واحدًا على الأقل قبل الاستيراد.' : 'Choose at least one file before import.');
+      return;
+    }
+
+    setMajorImportRunning('bulk-details');
+    setMajorImportNotice(null);
+    try {
+      const result = await ApiClient.importMajorDetailDossierFiles(buildMajorBulkPayload());
+      const batchIds = Array.isArray(result?.summary?.batchIds) ? result.summary.batchIds.filter((id: unknown): id is string => typeof id === 'string') : [];
+      if (batchIds[0]) {
+        setLastMajorImportBatches((prev) => ({ ...prev, [`${majorBulkCatalogKind}-bulk-details`]: batchIds[0] }));
+        await loadMajorImportReview(batchIds[0]);
+      } else {
+        await loadMajorImportReview();
+      }
+      setMajorImportNotice(isRTL
+        ? `تم استيراد ${result?.summary?.totalFiles ?? majorBulkFiles.length} ملف: ${result?.summary?.stagedRecords ?? 0} سجل جاهز للمراجعة و${result?.summary?.totalContentSections ?? 0} قسم تفاصيل.`
+        : `${result?.summary?.totalFiles ?? majorBulkFiles.length} files imported: ${result?.summary?.stagedRecords ?? 0} records staged with ${result?.summary?.totalContentSections ?? 0} detail sections.`);
+    } catch (error) {
+      setMajorImportNotice(error instanceof Error ? error.message : (isRTL ? 'تعذر استيراد الملفات.' : 'Files could not be imported.'));
+    } finally {
+      setMajorImportRunning(null);
     }
   };
 
@@ -1955,6 +2056,100 @@ export function AdminDomainImportCenterPage() {
               {majorImportNotice}
             </div>
           )}
+
+          <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <div className="mb-1 flex w-fit items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-extrabold text-blue-800">
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  <span>{isRTL ? 'استيراد ملفات تفاصيل متعددة' : 'Bulk detail dossier import'}</span>
+                </div>
+                <h3 className="text-base font-black text-slate-950">
+                  {isRTL ? 'ارفع عدة ملفات تخصصات في عملية واحدة' : 'Upload multiple major files in one run'}
+                </h3>
+                <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-600">
+                  {isRTL
+                    ? 'كل ملف يحتفظ باسمه ومصدره ودفعة المراجعة الخاصة به، والملخص يجمع عدد التخصصات والأقسام من جميع الملفات.'
+                    : 'Each file keeps its own source name and review batch while the summary combines records and detail sections across all files.'}
+                </p>
+              </div>
+
+              <div className="grid w-full gap-2 sm:grid-cols-[160px_1fr] lg:w-[520px]">
+                <select
+                  value={majorBulkCatalogKind}
+                  onChange={(event) => setMajorBulkCatalogKind(event.target.value as MajorCatalogKind)}
+                  className="rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                >
+                  {(['BACHELOR', 'MASTER', 'DOCTORATE', 'FELLOWSHIP'] as MajorCatalogKind[]).map((kind) => (
+                    <option key={kind} value={kind}>{MAJOR_KIND_LABELS[kind][isRTL ? 'ar' : 'en']}</option>
+                  ))}
+                </select>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-blue-300 bg-white px-3 py-2.5 text-xs font-extrabold text-blue-800 hover:bg-blue-100">
+                  <Paperclip className="h-4 w-4" />
+                  <span>{isRTL ? 'اختيار ملفات Markdown متعددة' : 'Choose multiple Markdown files'}</span>
+                  <input
+                    type="file"
+                    accept=".md,.markdown,.txt,text/markdown,text/plain"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => void handleSelectMajorBulkFiles(event.target.files)}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {majorBulkFiles.length > 0 && (
+              <div className="mt-4 rounded-xl border border-blue-100 bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-slate-900">
+                    {isRTL ? `الملفات المختارة: ${majorBulkFiles.length}` : `Selected files: ${majorBulkFiles.length}`}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {(majorBulkFiles.reduce((sum, file) => sum + file.sizeBytes, 0) / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {majorBulkFiles.slice(0, 8).map((file) => (
+                    <div key={`${file.sourceFileName}-${file.sizeBytes}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="truncate text-[11px] font-extrabold text-slate-800">{file.sourceFileName}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">{(file.sizeBytes / 1024).toFixed(1)} KB</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <button
+                onClick={handlePreviewMajorBulkDetailFiles}
+                disabled={majorImportRunning !== null || majorBulkFiles.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-extrabold text-blue-800 transition-all hover:bg-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                {majorImportRunning === 'bulk-details-preview' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                <span>{isRTL ? 'معاينة كل الملفات' : 'Preview all files'}</span>
+              </button>
+              <button
+                onClick={handleImportMajorBulkDetailFiles}
+                disabled={majorImportRunning !== null || majorBulkFiles.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-3 py-2.5 text-xs font-extrabold text-white shadow-xs transition-all hover:bg-blue-800 disabled:bg-blue-300"
+              >
+                {majorImportRunning === 'bulk-details' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+                <span>{isRTL ? 'استيراد كل الملفات' : 'Import all files'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMajorBulkFiles([]);
+                  setMajorImportPreview(null);
+                  setMajorImportNotice(null);
+                }}
+                disabled={majorImportRunning !== null || majorBulkFiles.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-extrabold text-slate-700 transition-all hover:bg-slate-100 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>{isRTL ? 'مسح الاختيار' : 'Clear selection'}</span>
+              </button>
+            </div>
+          </div>
 
           {majorImportPreview && (
             <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
