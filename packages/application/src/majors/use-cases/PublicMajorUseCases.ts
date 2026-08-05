@@ -26,7 +26,22 @@ export class PublicMajorUseCases {
       throw new Error('Major not found');
     }
 
-    return this.mapToPublicDto(major);
+    const publicMajor = this.mapToPublicDto(major);
+    if (!this.repository.listContentSections) {
+      return publicMajor;
+    }
+
+    const sections = await this.repository.listContentSections(major.id);
+    return {
+      ...publicMajor,
+      contentSections: sections.map((section) => ({
+        sectionKey: section.sectionKey,
+        title: section.title,
+        content: section.content,
+        reviewStatus: section.reviewStatus,
+        metadata: section.metadata,
+      })),
+    };
   }
 
   private mapToPublicDto(major: MajorDto): PublicMajorDto {

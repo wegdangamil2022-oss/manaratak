@@ -14,6 +14,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { ApiClient } from '../../api/client';
+import { getMajorDegreeTemplate } from '../majors/majorDegreeTemplates';
 import { phase10MajorCatalogSamples } from './phase10MajorCatalogSamples';
 import { findPhase10MajorSample, Phase10MajorSample, Phase10MajorSection } from './phase10MajorSamples';
 
@@ -218,6 +219,24 @@ export function AdminMajorDetailPage() {
     return { important, remaining };
   }, [sections]);
 
+  const degreeTemplate = useMemo(() => getMajorDegreeTemplate(major?.degreeLevel), [major?.degreeLevel]);
+
+  const templateCoverage = useMemo(() => {
+    return degreeTemplate.sections.map((templateSection) => {
+      const matched = sections.find((section) => {
+        const key = section.sectionKey.toLowerCase();
+        const title = section.title.toLowerCase();
+        return (
+          key.includes(templateSection.key) ||
+          title.includes(templateSection.titleAr.toLowerCase()) ||
+          title.includes(templateSection.titleEn.toLowerCase())
+        );
+      });
+
+      return { ...templateSection, matched };
+    });
+  }, [degreeTemplate, sections]);
+
   if (!demoUnlocked) {
     return <Navigate to="/login" replace />;
   }
@@ -351,6 +370,29 @@ export function AdminMajorDetailPage() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-[18px] font-black">المحتوى التفصيلي</h2>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-bold text-slate-600">{sections.length} قسم محفوظ</span>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-[15px] font-black text-emerald-950">قالب {degreeTemplate.labelAr}</h3>
+                    <span className="text-[12px] font-bold text-emerald-800">
+                      {templateCoverage.filter((item) => item.matched).length} / {templateCoverage.length} أقسام مكتملة
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[12px] leading-6 text-emerald-900">{degreeTemplate.summaryAr}</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {templateCoverage.map((item) => (
+                      <div key={item.key} className="rounded-xl bg-white/80 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-extrabold text-slate-900">{item.titleAr}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${item.matched ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {item.matched ? 'موجود' : 'ناقص'}
+                          </span>
+                        </div>
+                        {!item.matched && <p className="mt-1 text-[12px] leading-6 text-slate-500">{item.purposeAr}</p>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {sections.length === 0 ? (

@@ -19,6 +19,9 @@ describe('MajorAdminRouter', () => {
     listVersions: vi.fn(),
     listLevelProfiles: vi.fn(),
     listContentSections: vi.fn(),
+    listAliases: vi.fn(),
+    listRelationships: vi.fn(),
+    listClassificationMappings: vi.fn(),
     listSources: vi.fn(),
   });
 
@@ -127,6 +130,42 @@ describe('MajorAdminRouter', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ data: [{ id: 'source-1', sourceType: 'CATALOG_FILE' }] });
     expect(useCases.listSources).toHaveBeenCalledWith('major-1');
+  });
+
+  it('GET /admin/majors/:id/aliases returns stored aliases', async () => {
+    const useCases = createMockUseCases();
+    useCases.listAliases.mockResolvedValue([{ id: 'alias-1', alias: 'CS', aliasType: 'ALIAS' }]);
+    const app = createApp(useCases);
+
+    const res = await request(app).get('/admin/majors/major-1/aliases');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [{ id: 'alias-1', alias: 'CS', aliasType: 'ALIAS' }] });
+    expect(useCases.listAliases).toHaveBeenCalledWith('major-1');
+  });
+
+  it('GET /admin/majors/:id/relationships returns stored relationships', async () => {
+    const useCases = createMockUseCases();
+    useCases.listRelationships.mockResolvedValue([{ id: 'rel-1', relationshipType: 'SIMILAR' }]);
+    const app = createApp(useCases);
+
+    const res = await request(app).get('/admin/majors/major-1/relationships');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [{ id: 'rel-1', relationshipType: 'SIMILAR' }] });
+    expect(useCases.listRelationships).toHaveBeenCalledWith('major-1');
+  });
+
+  it('GET /admin/majors/:id/classification-mappings returns taxonomy mappings', async () => {
+    const useCases = createMockUseCases();
+    useCases.listClassificationMappings.mockResolvedValue([{ id: 'map-1', taxonomyNodeId: 'taxonomy-1' }]);
+    const app = createApp(useCases);
+
+    const res = await request(app).get('/admin/majors/major-1/classification-mappings');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [{ id: 'map-1', taxonomyNodeId: 'taxonomy-1' }] });
+    expect(useCases.listClassificationMappings).toHaveBeenCalledWith('major-1');
   });
 
   it('returns 400 on use case errors', async () => {

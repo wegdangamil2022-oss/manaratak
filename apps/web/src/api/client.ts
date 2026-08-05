@@ -242,6 +242,19 @@ export interface PublicMajorDto {
   acquiredSkills?: string[];
   careerOutcomes?: string[];
   typicalCourses?: string[];
+  contentSections?: Array<{
+    sectionKey?: string;
+    title?: string;
+    content?: string;
+    reviewStatus?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  relationships?: Array<{
+    targetMajorId?: string;
+    relationshipType?: string;
+    notes?: string;
+    metadata?: Record<string, unknown>;
+  }>;
   metadata?: Record<string, unknown>;
 
   updatedAt: string;
@@ -1050,6 +1063,33 @@ export class ApiClient {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to fetch major content sections');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorAliases(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/aliases`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major aliases');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorRelationships(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/relationships`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major relationships');
+    }
+    return res.json();
+  }
+
+  static async getAdminMajorClassificationMappings(id: string): Promise<{ data: any[] }> {
+    const res = await fetch(`${API_BASE_URL}/admin/majors/${encodeURIComponent(id)}/classification-mappings`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to fetch major classification mappings');
     }
     return res.json();
   }

@@ -23,6 +23,7 @@ describe('PublicMajorUseCases', () => {
       listByStatus: vi.fn(),
       list: vi.fn(),
       listPublished: vi.fn(),
+      listContentSections: vi.fn(),
     };
     useCases = new PublicMajorUseCases(mockRepo);
   });
@@ -78,12 +79,27 @@ describe('PublicMajorUseCases', () => {
       updatedAt: new Date()
     });
 
+    mockRepo.listContentSections = vi.fn().mockResolvedValue([{
+      sectionKey: 'what-students-study',
+      title: 'ماذا يدرس الطالب',
+      content: 'Programming, algorithms, and systems.',
+      reviewStatus: 'PUBLISHED',
+      metadata: { sourceLevel: 2 },
+    }]);
+
     const result = await useCases.getMajor('computer-science');
 
     expect(result).not.toHaveProperty('id');
     expect(result).not.toHaveProperty('status');
     expect(result).toHaveProperty('displayName', 'Computer Science');
     expect(result).toHaveProperty('careerOutcomes', ['Software Engineer']);
+    expect(result.contentSections).toEqual([{
+      sectionKey: 'what-students-study',
+      title: 'ماذا يدرس الطالب',
+      content: 'Programming, algorithms, and systems.',
+      reviewStatus: 'PUBLISHED',
+      metadata: { sourceLevel: 2 },
+    }]);
   });
 
   it('getMajor throws if not PUBLISHED', async () => {

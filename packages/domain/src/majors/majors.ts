@@ -179,7 +179,9 @@ export interface FellowshipDefinitionDto {
 export type PublicMajorDto = Omit<
   MajorDto,
   'id' | 'canonicalDedupKey' | 'sourceImportRecordId' | 'status' | 'completenessStatus' | 'optionalFields' | 'createdAt'
->;
+> & {
+  contentSections?: Array<Pick<MajorContentSectionDto, 'sectionKey' | 'title' | 'content' | 'reviewStatus' | 'metadata'>>;
+};
 
 export interface MajorFilters {
   status?: MajorLifecycleStatus;
