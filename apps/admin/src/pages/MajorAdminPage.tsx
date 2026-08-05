@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApiClient } from '../api/client';
-import { BookOpen, Filter, Loader2, Award, Clipboard } from 'lucide-react';
+import { BookOpen, Filter, Loader2, Award, Clipboard, Search } from 'lucide-react';
 import { useTranslation } from "../i18n/I18nProvider";
 
 interface Major {
@@ -29,6 +29,8 @@ export function MajorAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [degreeFilter, setDegreeFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
   const fetchMajors = async () => {
@@ -37,6 +39,8 @@ export function MajorAdminPage() {
     try {
       const params = new URLSearchParams({ page: page.toString(), pageSize: '20' });
       if (statusFilter) params.append('status', statusFilter);
+      if (degreeFilter) params.append('degreeLevel', degreeFilter);
+      if (search) params.append('search', search);
       const response = await adminApiClient.request<PaginatedResponse>(`/admin/majors?${params.toString()}`);
       setData(response);
     } catch (err: any) {
@@ -48,7 +52,7 @@ export function MajorAdminPage() {
 
   useEffect(() => {
     fetchMajors();
-  }, [page, statusFilter]);
+  }, [page, statusFilter, degreeFilter, search]);
 
   const handleFilterChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setStatusFilter(event.target.value);
@@ -64,6 +68,35 @@ export function MajorAdminPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              className="bg-white border border-gray-300 rounded-md py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              placeholder="Search majors"
+            />
+          </div>
+          <div className="relative">
+            <select
+              value={degreeFilter}
+              onChange={(event) => {
+                setDegreeFilter(event.target.value);
+                setPage(1);
+              }}
+              className="appearance-none bg-white border border-gray-300 rounded-md py-2 pl-3 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+            >
+              <option value="">All Degree Levels</option>
+              <option value="Bachelor">Bachelor</option>
+              <option value="Master">Master</option>
+              <option value="Doctorate">Doctorate</option>
+              <option value="Fellowship">Fellowship</option>
+            </select>
+            <Filter className="absolute right-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
+          </div>
           <div className="relative">
             <select 
               value={statusFilter} 

@@ -141,12 +141,39 @@ export class PrismaMajorRepository implements IMajorRepository {
     if (filters.completenessStatus) where.completenessStatus = filters.completenessStatus;
     if (filters.academicFieldId) where.academicFieldId = filters.academicFieldId;
     if (filters.disciplineId) where.disciplineId = filters.disciplineId;
-    if (filters.search) {
+    const requiresOptionalFieldFiltering = Boolean(
+      filters.degreeLevel ||
+      filters.academicFieldOrDiscipline ||
+      filters.collegeOrFaculty ||
+      filters.search
+    );
+
+    if (filters.search && !requiresOptionalFieldFiltering) {
       where.OR = [
         { displayName: { contains: filters.search, mode: 'insensitive' } },
         { canonicalName: { contains: filters.search, mode: 'insensitive' } },
         { slug: { contains: filters.search, mode: 'insensitive' } },
       ];
+    }
+
+    if (requiresOptionalFieldFiltering) {
+      const records = await this.prisma.major.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      const filtered = records
+        .map((record) => this.mapToDto(record))
+        .filter((major) => this.matchesFilters(major, filters));
+      const start = (page - 1) * pageSize;
+      const data = filtered.slice(start, start + pageSize);
+
+      return {
+        data,
+        total: filtered.length,
+        page,
+        pageSize,
+        totalPages: Math.ceil(filtered.length / pageSize),
+      };
     }
     
     const [data, total] = await Promise.all([
@@ -456,6 +483,58 @@ export class PrismaMajorRepository implements IMajorRepository {
       return value as Record<string, unknown>;
     }
     return {};
+  }
+
+  private asUnknownRecord(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  private matchesFilters(major: MajorDto, filters: MajorFilters): boolean {
+    const optionalFields = this.asRecord(major.optionalFields);
+    const getText = (value: unknown): string => typeof value === 'string' ? value.toLowerCase() : '';
+    const degreeLevel = getText(major.degreeLevel ?? optionalFields.degreeLevel);
+    const field = getText(major.academicFieldOrDiscipline ?? optionalFields.academicFieldOrDiscipline);
+    const college = getText(major.collegeOrFaculty ?? optionalFields.collegeOrFaculty ?? major.facultyName);
+
+    if (filters.degreeLevel && degreeLevel !== filters.degreeLevel.toLowerCase()) {
+      return false;
+    }
+    if (filters.academicFieldOrDiscipline && !field.includes(filters.academicFieldOrDiscipline.toLowerCase())) {
+      return false;
+    }
+    if (filters.collegeOrFaculty && !college.includes(filters.collegeOrFaculty.toLowerCase())) {
+      return false;
+    }
+    if (filters.search) {
+      const search = filters.search.toLowerCase();
+      const metadata = this.asUnknownRecord(optionalFields.metadata);
+      const localizedNames = this.asUnknownRecord(optionalFields.localizedNames);
+      const haystack = [
+        major.displayName,
+        major.canonicalName,
+        major.slug,
+        major.classificationCode,
+        optionalFields.classificationCode,
+        optionalFields.sourceFileName,
+        optionalFields.sourceClassificationSystem,
+        localizedNames.ar,
+        localizedNames.en,
+        metadata.catalogKind,
+        metadata.sourceFileName,
+        degreeLevel,
+        field,
+        college,
+      ].map((value) => typeof value === 'string' ? value.toLowerCase() : '').join(' ');
+
+      if (!haystack.includes(search)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private mapVersionToDto(record: Prisma.MajorVersionGetPayload<Record<string, never>>): MajorVersionDto {
