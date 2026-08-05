@@ -52,7 +52,7 @@ describe('AdminMajorUseCases', () => {
       displayName: 'Updated Computer Science'
     });
 
-    console.log(mockRepo.update.mock.calls); expect(mockRepo.update).toHaveBeenCalledWith('major-1', expect.objectContaining({
+    expect(mockRepo.update).toHaveBeenCalledWith('major-1', expect.objectContaining({
       displayName: 'Updated Computer Science',
       completenessStatus: MajorImportCompletenessState.COMPLETE
     }));

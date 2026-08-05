@@ -100,6 +100,8 @@ const tabs: Array<{ id: DetailTab; label: string; icon: typeof BookOpen }> = [
   { id: 'versions', label: 'النسخ والمصادر', icon: Link2 },
 ];
 
+const PUBLIC_WEB_BASE_URL = (import.meta.env.VITE_PUBLIC_WEB_URL || '').replace(/\/$/, '');
+
 function formatLabel(value?: string | null): string {
   if (!value) return 'غير محدد';
   return value.replace(/_/g, ' ');
@@ -223,6 +225,8 @@ export function MajorDetailPage() {
     );
   }
 
+  const publicMajorUrl = major.slug ? `${PUBLIC_WEB_BASE_URL}/majors/${major.slug}` : undefined;
+
   return (
     <main dir="rtl" className="mx-auto max-w-7xl space-y-5" style={{ fontFamily: "'Cairo', sans-serif" }}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -304,8 +308,8 @@ export function MajorDetailPage() {
                 فتح المصدر
               </a>
             )}
-            {major.slug && major.status === 'PUBLISHED' && (
-              <a href={`/majors/${major.slug}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700">
+            {publicMajorUrl && major.status === 'PUBLISHED' && (
+              <a href={publicMajorUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700">
                 <BookOpen className="h-4 w-4" />
                 فتح الصفحة العامة
               </a>
