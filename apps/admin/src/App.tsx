@@ -20,6 +20,7 @@ import { AdminHealthReadinessPage } from './pages/AdminHealthReadinessPage';
 import { ImportAdminPage } from './pages/ImportAdminPage';
 import { UniversityAdminPage } from './pages/UniversityAdminPage';
 import { MajorAdminPage } from './pages/MajorAdminPage';
+import { MajorDetailPage } from './pages/MajorDetailPage';
 import { SettingsAdminPage } from './pages/SettingsAdminPage';
 import { StudyDestinationsAdminPage } from './pages/StudyDestinationsAdminPage';
 import { StudyDestinationDetailPage } from './pages/StudyDestinationDetailPage';
@@ -104,6 +105,7 @@ function AdminLayout() {
               <Route path="/admin/scholarships/:id" element={<ScholarshipDetailPage />} />
               <Route path="/universities" element={<UniversityAdminPage />} />
               <Route path="/majors" element={<MajorAdminPage />} />
+              <Route path="/majors/:id" element={<MajorDetailPage />} />
               <Route path="/courses" element={<CourseListPage />} />
               <Route path="/courses/:id" element={<CourseDetailPage />} />
               <Route path="/certificates" element={<CertificateAdminPage />} />
