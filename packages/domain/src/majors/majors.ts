@@ -126,6 +126,42 @@ export interface MajorVersionDto {
   metadata?: Record<string, unknown>;
 }
 
+export type MajorPhaseLinkTargetType =
+  | 'ACADEMIC_PROGRAM'
+  | 'SCHOLARSHIP'
+  | 'COURSE'
+  | 'CAREER'
+  | 'JOB'
+  | 'TAXONOMY_NODE';
+
+export type MajorPhaseLinkSource =
+  | 'MAJOR_IDENTITY'
+  | 'MAJOR_LEVEL_PROFILE'
+  | 'TEXT_MATCH'
+  | 'TAXONOMY_MAPPING';
+
+export interface MajorPhaseLinkDto {
+  targetType: MajorPhaseLinkTargetType;
+  label: string;
+  href: string;
+  query: Record<string, string>;
+  phase: number;
+  relationship: string;
+  source: MajorPhaseLinkSource;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MajorPhaseLinkSummaryDto {
+  majorId?: string;
+  publicId?: string;
+  slug?: string;
+  displayName: string;
+  degreeLevel?: MajorLevelInput;
+  academicFieldOrDiscipline?: string | null;
+  collegeOrFaculty?: string | null;
+  links: MajorPhaseLinkDto[];
+}
+
 export interface MajorDto {
   id: string;
   publicId: string;
@@ -181,7 +217,138 @@ export type PublicMajorDto = Omit<
   'id' | 'canonicalDedupKey' | 'sourceImportRecordId' | 'status' | 'completenessStatus' | 'optionalFields' | 'createdAt'
 > & {
   contentSections?: Array<Pick<MajorContentSectionDto, 'sectionKey' | 'title' | 'content' | 'reviewStatus' | 'metadata'>>;
+  phaseLinks?: MajorPhaseLinkDto[];
 };
+
+export class MajorPhaseLinkingService {
+  public static buildSummary(major: MajorDto | PublicMajorDto): MajorPhaseLinkSummaryDto {
+    return {
+      majorId: 'id' in major ? major.id : undefined,
+      publicId: major.publicId,
+      slug: major.slug,
+      displayName: major.displayName,
+      degreeLevel: major.degreeLevel,
+      academicFieldOrDiscipline: major.academicFieldOrDiscipline,
+      collegeOrFaculty: major.collegeOrFaculty,
+      links: this.buildLinks(major),
+    };
+  }
+
+  public static buildLinks(major: MajorDto | PublicMajorDto): MajorPhaseLinkDto[] {
+    const identityQuery = this.buildIdentityQuery(major);
+    const degreeQuery = this.buildDegreeAwareQuery(major);
+    const taxonomyQuery = this.buildTaxonomyQuery(major);
+
+    const links: MajorPhaseLinkDto[] = [
+      {
+        targetType: 'ACADEMIC_PROGRAM',
+        label: 'Programs that offer this major',
+        href: this.withQuery('/programs', degreeQuery),
+        query: degreeQuery,
+        phase: 11,
+        relationship: 'PROGRAMS_BY_MAJOR_LEVEL_PROFILE',
+        source: 'MAJOR_LEVEL_PROFILE',
+        metadata: this.buildCommonMetadata(major),
+      },
+      {
+        targetType: 'SCHOLARSHIP',
+        label: 'Scholarships that accept this major',
+        href: this.withQuery('/scholarships', degreeQuery),
+        query: degreeQuery,
+        phase: 12,
+        relationship: 'SCHOLARSHIPS_BY_ELIGIBLE_MAJOR',
+        source: 'MAJOR_LEVEL_PROFILE',
+        metadata: this.buildCommonMetadata(major),
+      },
+      {
+        targetType: 'COURSE',
+        label: 'Courses related to this major',
+        href: this.withQuery('/courses', identityQuery),
+        query: identityQuery,
+        phase: 13,
+        relationship: 'COURSES_BY_RELATED_MAJOR',
+        source: 'MAJOR_IDENTITY',
+        metadata: this.buildCommonMetadata(major),
+      },
+      {
+        targetType: 'CAREER',
+        label: 'Career paths for this major',
+        href: this.withQuery('/careers', identityQuery),
+        query: identityQuery,
+        phase: 21,
+        relationship: 'CAREERS_BY_MAJOR_REFERENCE',
+        source: 'MAJOR_IDENTITY',
+        metadata: this.buildCommonMetadata(major),
+      },
+      {
+        targetType: 'JOB',
+        label: 'Jobs connected to this major',
+        href: this.withQuery('/jobs', identityQuery),
+        query: identityQuery,
+        phase: 21,
+        relationship: 'JOBS_BY_MAJOR_REFERENCE',
+        source: 'MAJOR_IDENTITY',
+        metadata: this.buildCommonMetadata(major),
+      },
+    ];
+
+    if (Object.keys(taxonomyQuery).length > 0) {
+      links.unshift({
+        targetType: 'TAXONOMY_NODE',
+        label: 'Academic taxonomy reference',
+        href: this.withQuery('/academic-taxonomy', taxonomyQuery),
+        query: taxonomyQuery,
+        phase: 8,
+        relationship: 'MAJOR_TO_ACADEMIC_TAXONOMY',
+        source: 'TAXONOMY_MAPPING',
+        metadata: this.buildCommonMetadata(major),
+      });
+    }
+
+    return links;
+  }
+
+  private static buildIdentityQuery(major: MajorDto | PublicMajorDto): Record<string, string> {
+    return {
+      major: major.displayName,
+      majorSlug: major.slug,
+      ...(major.publicId ? { majorPublicId: major.publicId } : {}),
+    };
+  }
+
+  private static buildDegreeAwareQuery(major: MajorDto | PublicMajorDto): Record<string, string> {
+    return {
+      ...this.buildIdentityQuery(major),
+      ...(major.degreeLevel ? { degreeLevel: String(major.degreeLevel) } : {}),
+    };
+  }
+
+  private static buildTaxonomyQuery(major: MajorDto | PublicMajorDto): Record<string, string> {
+    return {
+      ...(major.academicFieldId ? { academicFieldId: major.academicFieldId } : {}),
+      ...(major.disciplineId ? { disciplineId: major.disciplineId } : {}),
+      ...(major.academicFieldOrDiscipline ? { academicFieldOrDiscipline: major.academicFieldOrDiscipline } : {}),
+    };
+  }
+
+  private static buildCommonMetadata(major: MajorDto | PublicMajorDto): Record<string, unknown> {
+    return {
+      majorPublicId: major.publicId,
+      majorSlug: major.slug,
+      majorName: major.displayName,
+      degreeLevel: major.degreeLevel,
+      academicFieldId: major.academicFieldId,
+      disciplineId: major.disciplineId,
+      currentPublishedVersionId: major.currentPublishedVersionId,
+    };
+  }
+
+  private static withQuery(path: string, query: Record<string, string>): string {
+    const params = new URLSearchParams(query);
+    const serialized = params.toString();
+    return serialized ? `${path}?${serialized}` : path;
+  }
+}
 
 export interface MajorFilters {
   status?: MajorLifecycleStatus;

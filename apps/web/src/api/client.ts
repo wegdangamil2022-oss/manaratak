@@ -249,6 +249,16 @@ export interface PublicMajorDto {
     reviewStatus?: string;
     metadata?: Record<string, unknown>;
   }>;
+  phaseLinks?: Array<{
+    targetType: 'ACADEMIC_PROGRAM' | 'SCHOLARSHIP' | 'COURSE' | 'CAREER' | 'JOB' | 'TAXONOMY_NODE';
+    label: string;
+    href: string;
+    query: Record<string, string>;
+    phase: number;
+    relationship: string;
+    source: 'MAJOR_IDENTITY' | 'MAJOR_LEVEL_PROFILE' | 'TEXT_MATCH' | 'TAXONOMY_MAPPING';
+    metadata?: Record<string, unknown>;
+  }>;
   relationships?: Array<{
     targetMajorId?: string;
     relationshipType?: string;

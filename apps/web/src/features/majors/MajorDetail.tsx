@@ -72,6 +72,25 @@ function renderStringList(items?: string[], emptyLabel = 'غير متوفر بع
   );
 }
 
+function getPhaseLinkLabel(targetType: string): string {
+  switch (targetType) {
+    case 'ACADEMIC_PROGRAM':
+      return 'البرامج الجامعية';
+    case 'SCHOLARSHIP':
+      return 'المنح المناسبة';
+    case 'COURSE':
+      return 'الدورات المرتبطة';
+    case 'CAREER':
+      return 'المسارات المهنية';
+    case 'JOB':
+      return 'الوظائف المرتبطة';
+    case 'TAXONOMY_NODE':
+      return 'التصنيف الأكاديمي';
+    default:
+      return 'رابط مرتبط';
+  }
+}
+
 function InfoTile({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
@@ -145,6 +164,7 @@ export function MajorDetail() {
   }
 
   const relatedMajors = normalizeRelated(data.relatedMajors);
+  const phaseLinks = Array.isArray(data.phaseLinks) ? data.phaseLinks : [];
   const { template, templateSections, extraSections } = pageModel;
   const summaryText = data.studentFriendlySummary || data.description || `${data.displayName} is a ${data.degreeLevel} study pathway.`;
 
@@ -265,6 +285,27 @@ export function MajorDetail() {
             </h2>
             {renderStringList(data.careerOutcomes)}
           </section>
+
+          {phaseLinks.length > 0 && (
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 flex items-center gap-2 text-[16px] font-black">
+                <Link2 className="h-5 w-5 text-emerald-700" />
+                روابط المراحل المرتبطة
+              </h2>
+              <div className="grid gap-2">
+                {phaseLinks.map((link) => (
+                  <Link
+                    key={`${link.phase}-${link.targetType}-${link.relationship}`}
+                    to={link.href}
+                    className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-right transition hover:border-emerald-200 hover:bg-emerald-50"
+                  >
+                    <span className="block text-[12px] font-black text-emerald-800">{getPhaseLinkLabel(link.targetType)}</span>
+                    <span className="mt-1 block text-[12px] leading-6 text-slate-500">المرحلة {link.phase} · {link.relationship}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {relatedMajors.length > 0 && (
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

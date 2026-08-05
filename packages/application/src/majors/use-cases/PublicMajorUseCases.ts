@@ -1,6 +1,7 @@
 import {
   IMajorRepository,
   MajorDto,
+  MajorPhaseLinkingService,
   MajorStatus,
   PaginatedMajorResult,
   PublicMajorDto,
@@ -59,6 +60,7 @@ export class PublicMajorUseCases {
     return {
       ...publicData,
       ...(optionalFields || {}),
+      phaseLinks: MajorPhaseLinkingService.buildLinks(major),
     };
   }
 }
